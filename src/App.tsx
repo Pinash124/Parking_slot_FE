@@ -11,6 +11,7 @@ import ParkingSessions from './pages/ParkingSessions';
 import GateValidator from './pages/GateValidator';
 import Reservations from './pages/Reservations';
 import Transactions from './pages/Transactions';
+import ManagerDashboard from './pages/ManagerDashboard';
 
 // Create TanStack Query Client
 const queryClient = new QueryClient({
@@ -84,6 +85,10 @@ export default function App() {
                 <Transactions />
               </ProtectedRoute>
             } 
+          />
+          <Route
+            path="/manager"
+            element={<ManagerDashboard />}
           />
 
           {/* Catch all fallback redirects to dashboard */}

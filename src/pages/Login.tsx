@@ -20,7 +20,12 @@ export default function Login() {
     setError(null);
     try {
       await authService.login({ email, password });
-      navigate('/');
+      const currentUser = authService.getCurrentUser();
+      if(currentUser?.role === 'MANAGER') {
+        navigate('/manager');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       console.error(err);
       setError(

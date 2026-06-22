@@ -30,6 +30,7 @@ export interface AuthRegistrationRequest {
   email: string;
   phone: string;
   password?: string;
+  username?: string;
 }
 
 export interface AuthRegistrationResponse {

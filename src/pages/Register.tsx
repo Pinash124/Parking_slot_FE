@@ -33,6 +33,7 @@ export default function Register() {
         email,
         phone,
         password,
+        username: fullName,
       });
       setSuccess(response.message || 'Registration successful! Redirecting to login...');
       setTimeout(() => {
