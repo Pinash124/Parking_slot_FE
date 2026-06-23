@@ -1,205 +1,113 @@
-// Generic Page Response wrapper from Spring Page
-export interface PageResponse<T> {
-  content: T[];
-  page: number;
-  size: number;
-  totalPages: number;
-  totalElements: number;
-  first: boolean;
-  last: boolean;
-}
-
 // Authentication DTOs
 export interface AuthLoginRequest {
-  email: string;
+  usernameOrEmail: string;
   password?: string;
 }
 
-export interface AuthLoginResponse {
-  accessToken: string;
-  tokenType: string;
-  expiresAt: string; // LocalDateTime as string
-  userId: number;
-  fullName: string;
+export interface AuthResponse {
+  message: string;
   email: string;
+  username: string;
   role: string;
 }
 
 export interface AuthRegistrationRequest {
   fullName: string;
+  username: string;
   email: string;
-  phone: string;
+  phone?: string | null;
   password?: string;
 }
 
-export interface AuthRegistrationResponse {
-  userId: number;
-  fullName: string;
+export interface ForgotPasswordRequest {
   email: string;
-  phone: string;
-  status: string;
-  role: string;
-  message: string;
 }
 
-export interface AuthLogoutResponse {
-  success: boolean;
+export interface PasswordResetResponse {
   message: string;
+  resetLink?: string | null;
 }
 
-// Dashboard DTOs
-export interface DashboardOverviewResponse {
-  totalReservations: number;
-  pendingReservations: number;
-  approvedReservations: number;
-  activeSessions: number;
+export interface ResetPasswordRequest {
+  token: string;
+  newPassword?: string;
+}
+
+// Manager Overview Report
+export interface ManagerOverviewReport {
+  from: string;
+  to: string;
+  totalCheckIns: number;
+  totalCheckOuts: number;
+  revenue: number;
+  totalSlots: number;
   availableSlots: number;
   occupiedSlots: number;
   reservedSlots: number;
-  pendingPayments: number;
-  completedPayments: number;
-  todayRevenue: number;
-  totalTransactions: number;
+  maintenanceSlots: number;
+  lockedSlots: number;
+  occupancyRate: number;
+  peakHours?: Record<string, number> | null;
 }
 
-// Reservation DTOs
-export interface ReservationCreateRequest {
-  userId: number;
-  vehicleId: number;
-  zoneId: number;
-  startTime: string; // ISO LocalDateTime format
-  endTime: string;   // ISO LocalDateTime format
-}
-
-export interface ReservationResponse {
-  id: number;
-  reservationCode: string;
-  userId: number;
-  userFullName: string;
-  vehicleId: number;
-  licensePlate: string;
-  zoneId: number;
-  zoneName: string;
-  startTime: string;
-  endTime: string;
-  status: 'PENDING' | 'APPROVED' | 'CANCELLED';
-  createdAt: string;
-}
-
-// Parking Session DTOs
-export interface SessionCheckInRequest {
+// Parking Session DTO
+export interface ParkingSession {
+  sessionId?: number;
   reservationId?: number | null;
   vehicleId: number;
   slotId: number;
+  entryStaffId?: number | null;
+  exitStaffId?: number | null;
+  entryGateId?: number | null;
+  exitGateId?: number | null;
   ticketCode: string;
-  entryTime: string; // ISO LocalDateTime format
-}
-
-export interface ParkingSessionResponse {
-  id: number;
-  ticketCode: string;
-  reservationId?: number | null;
-  vehicleId: number;
-  licensePlate: string;
-  slotId: number;
-  slotNumber: string;
-  entryTime: string;
+  entryTime?: string | null;
   exitTime?: string | null;
   parkingFee?: number | null;
   penaltyFee?: number | null;
   totalFee?: number | null;
-  status: 'ACTIVE' | 'CHECKED_OUT' | 'CANCELLED';
+  status: 'CREATED' | 'ACTIVE' | 'OVERDUE' | 'VIOLATION' | 'CANCELLED' | 'PAYMENT_PENDING' | 'COMPLETED' | 'CLOSED';
 }
 
-// Checkout & Barrier DTOs
-export interface PaymentCheckoutPrepareRequest {
-  licensePlate: string;
-  exitTime: string;
-  lostTicket: boolean;
-  overtimeMinutes?: number | null;
+// Parking Slot
+export interface ParkingSlot {
+  slotId: number;
+  slotNumber: string;
+  status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE' | 'LOCKED';
+  vehicleTypeId: number;
+  zoneId?: number;
 }
 
-export interface PaymentCheckoutResponse {
-  sessionId: number;
-  licensePlate: string;
-  entryTime: string;
-  exitTime: string;
-  parkingFee: number;
-  penaltyFee: number;
-  totalFee: number;
-  sessionStatus: string;
-  paymentId?: number | null;
-  paymentMethod?: string | null;
-  paymentStatus?: string | null;
-  paid: boolean;
-  paidAt?: string | null;
-  exitDeadline?: string | null;
-  exitWindowMinutes: number;
+// Parking Zone
+export interface ParkingZone {
+  zoneId: number;
+  zoneName: string;
+  buildingId: number;
+  vehicleTypeId: number;
+  capacity: number;
 }
 
-export interface PaymentExitValidationRequest {
-  licensePlate: string;
-  detectedAt: string;
+// Parking Building
+export interface ParkingBuilding {
+  buildingId: number;
+  buildingName: string;
+  address?: string;
 }
 
-export interface PaymentExitValidationResponse {
-  sessionId: number;
-  licensePlate: string;
-  paymentId?: number | null;
-  paymentStatus?: string | null;
-  paidAt?: string | null;
-  exitDeadline?: string | null;
-  remainingSeconds: number;
-  openBarrier: boolean;
-  decision: 'OPEN_PAYMENT_VERIFIED' | 'DENY_PAYMENT_REQUIRED' | 'DENY_EXIT_WINDOW_EXPIRED';
+// Vehicle Type
+export interface VehicleType {
+  vehicleTypeId: number;
+  typeName: string;
+  description?: string;
 }
 
-// Payment Gateway DTOs
-export interface PaymentGatewayRequest {
-  sessionId: number;
-  amount: number;
-  returnUrl: string;
-  orderInfo: string;
-}
-
-export interface PaymentGatewayResponse {
-  paymentId: number;
-  referenceCode: string;
-  paymentUrl: string;
-  qrContent: string;
+// User Response
+export interface UserResponse {
+  userId: number;
+  fullName: string;
+  username: string;
+  email: string;
+  phone?: string;
+  role: string;
   status: string;
-  amount: number;
-}
-
-export interface PaymentGatewayConfirmRequest {
-  referenceCode: string;
-  status: 'SUCCESS' | 'FAILED';
-  transactionNo: string;
-  message: string;
-}
-
-// Transaction History DTOs
-export interface TransactionHistoryResponse {
-  id: number;
-  paymentId: number;
-  amount: number;
-  paymentMethod: 'CASH' | 'MOMO' | 'VNPAY';
-  referenceCode: string;
-  transactionNo?: string | null;
-  status: 'PENDING' | 'SUCCESS' | 'FAILED';
-  paymentTime?: string | null;
-  licensePlate?: string | null;
-  reservationCode?: string | null;
-  userFullName?: string | null;
-}
-
-export interface TransactionHistorySummaryResponse {
-  totalCount: number;
-  totalAmount: number;
-  successCount: number;
-  successAmount: number;
-  failedCount: number;
-  failedAmount: number;
-  pendingCount: number;
-  pendingAmount: number;
 }

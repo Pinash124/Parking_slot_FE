@@ -9,8 +9,10 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import ParkingSessions from './pages/ParkingSessions';
 import GateValidator from './pages/GateValidator';
-import Reservations from './pages/Reservations';
-import Transactions from './pages/Transactions';
+import ParkingLogs from './pages/ParkingLogs';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+import OAuth2Callback from './pages/OAuth2Callback';
 
 // Create TanStack Query Client
 const queryClient = new QueryClient({
@@ -43,6 +45,9 @@ export default function App() {
           {/* Public Auth Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/oauth2/callback" element={<OAuth2Callback />} />
 
           {/* Protected Parking System Operations */}
           <Route 
@@ -70,18 +75,10 @@ export default function App() {
             } 
           />
           <Route 
-            path="/reservations" 
+            path="/logs" 
             element={
               <ProtectedRoute>
-                <Reservations />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/transactions" 
-            element={
-              <ProtectedRoute>
-                <Transactions />
+                <ParkingLogs />
               </ProtectedRoute>
             } 
           />

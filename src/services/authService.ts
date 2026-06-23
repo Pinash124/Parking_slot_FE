@@ -1,31 +1,31 @@
 import api from './api';
 import type { 
   AuthLoginRequest, 
-  AuthLoginResponse, 
-  AuthRegistrationRequest, 
-  AuthRegistrationResponse, 
-  AuthLogoutResponse 
+  AuthResponse, 
+  AuthRegistrationRequest,
+  ForgotPasswordRequest,
+  PasswordResetResponse,
+  ResetPasswordRequest
 } from '../types/parking';
 
 export interface UserSession {
-  userId: number;
-  fullName: string;
+  username: string;
   email: string;
   role: string;
 }
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+
 export const authService = {
   /**
-   * Log in user with credentials and store session token.
+   * Đăng nhập người dùng bằng tài khoản/email và mật khẩu.
    */
-  login: async (payload: AuthLoginRequest): Promise<AuthLoginResponse> => {
-    const response = await api.post<AuthLoginResponse>('/api/auth/login', payload);
+  login: async (payload: AuthLoginRequest): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>('/api/auth/login', payload);
     const data = response.data;
     
-    // Save to localStorage
-    localStorage.setItem('token', data.accessToken);
-    localStorage.setItem('userId', data.userId.toString());
-    localStorage.setItem('fullName', data.fullName);
+    // Lưu thông tin người dùng vào localStorage
+    localStorage.setItem('username', data.username);
     localStorage.setItem('email', data.email);
     localStorage.setItem('role', data.role);
     
@@ -33,19 +33,56 @@ export const authService = {
   },
 
   /**
-   * Register a new CUSTOMER account.
+   * Đăng ký tài khoản người dùng mới.
    */
-  register: async (payload: AuthRegistrationRequest): Promise<AuthRegistrationResponse> => {
-    const response = await api.post<AuthRegistrationResponse>('/api/auth/register', payload);
+  register: async (payload: AuthRegistrationRequest): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>('/api/auth/register', payload);
     return response.data;
   },
 
   /**
-   * Log out current user, notify backend, and clear localStorage.
+   * Gửi yêu cầu đặt lại mật khẩu (quên mật khẩu).
    */
-  logout: async (): Promise<AuthLogoutResponse> => {
+  forgotPassword: async (payload: ForgotPasswordRequest): Promise<PasswordResetResponse> => {
+    const response = await api.post<PasswordResetResponse>('/api/auth/forgot-password', payload);
+    return response.data;
+  },
+
+  /**
+   * Đặt lại mật khẩu mới sử dụng token xác nhận.
+   */
+  resetPassword: async (payload: ResetPasswordRequest): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>('/api/auth/reset-password', payload);
+    return response.data;
+  },
+
+  /**
+   * Chuyển hướng người dùng qua trang đăng nhập Google của Backend.
+   */
+  redirectToGoogle: () => {
+    window.location.href = `${API_URL}/api/auth/google`;
+  },
+
+  /**
+   * Lấy thông tin đăng nhập Google thành công và lưu session.
+   */
+  getGoogleLoginSuccess: async (): Promise<AuthResponse> => {
+    const response = await api.get<AuthResponse>('/api/auth/oauth2/success');
+    const data = response.data;
+    
+    localStorage.setItem('username', data.username);
+    localStorage.setItem('email', data.email);
+    localStorage.setItem('role', data.role);
+    
+    return data;
+  },
+
+  /**
+   * Đăng xuất người dùng hiện tại và xóa session.
+   */
+  logout: async (): Promise<any> => {
     try {
-      const response = await api.post<AuthLogoutResponse>('/api/auth/logout');
+      const response = await api.post('/api/auth/logout');
       return response.data;
     } finally {
       authService.clearSession();
@@ -53,47 +90,35 @@ export const authService = {
   },
 
   /**
-   * Clear session info locally.
+   * Xóa thông tin phiên làm việc cục bộ.
    */
   clearSession: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('fullName');
+    localStorage.removeItem('username');
     localStorage.removeItem('email');
     localStorage.removeItem('role');
   },
 
   /**
-   * Get JWT Token.
-   */
-  getToken: (): string | null => {
-    return localStorage.getItem('token');
-  },
-
-  /**
-   * Check if user is authenticated.
+   * Kiểm tra xem người dùng đã đăng nhập chưa.
    */
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem('username');
   },
 
   /**
-   * Retrieve stored user details.
+   * Lấy thông tin người dùng hiện tại.
    */
   getCurrentUser: (): UserSession | null => {
-    const token = localStorage.getItem('token');
-    const userIdStr = localStorage.getItem('userId');
-    const fullName = localStorage.getItem('fullName');
+    const username = localStorage.getItem('username');
     const email = localStorage.getItem('email');
     const role = localStorage.getItem('role');
 
-    if (!token || !userIdStr || !fullName || !email || !role) {
+    if (!username || !email || !role) {
       return null;
     }
 
     return {
-      userId: parseInt(userIdStr, 10),
-      fullName,
+      username,
       email,
       role
     };

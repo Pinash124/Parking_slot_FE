@@ -1,126 +1,51 @@
 import api from './api';
 import type {
-  PageResponse,
-  DashboardOverviewResponse,
-  ReservationCreateRequest,
-  ReservationResponse,
-  SessionCheckInRequest,
-  ParkingSessionResponse,
-  PaymentCheckoutPrepareRequest,
-  PaymentCheckoutResponse,
-  PaymentExitValidationRequest,
-  PaymentExitValidationResponse,
-  PaymentGatewayRequest,
-  PaymentGatewayResponse,
-  PaymentGatewayConfirmRequest,
-  TransactionHistoryResponse,
-  TransactionHistorySummaryResponse,
+  ParkingSession,
+  ManagerOverviewReport,
+  ParkingSlot
 } from '../types/parking';
 
 export const parkingService = {
   // 1. Dashboard Overview
-  getOverview: async (): Promise<DashboardOverviewResponse> => {
-    const response = await api.get<DashboardOverviewResponse>('/api/dashboard/overview');
+  getOverviewReport: async (params?: { from?: string; to?: string }): Promise<ManagerOverviewReport> => {
+    const response = await api.get<ManagerOverviewReport>('/api/manager/reports/overview', { params });
     return response.data;
   },
 
-  // 2. Reservations
-  searchReservations: async (params?: {
-    userId?: number;
-    vehicleId?: number;
-    zoneId?: number;
-    status?: string;
-    from?: string;
-    to?: string;
-    page?: number;
-    size?: number;
-  }): Promise<PageResponse<ReservationResponse>> => {
-    const response = await api.get<PageResponse<ReservationResponse>>('/api/reservations', { params });
+  // 2. Parking Sessions
+  getAllSessions: async (): Promise<ParkingSession[]> => {
+    const response = await api.get<ParkingSession[]>('/api/parking-sessions');
     return response.data;
   },
 
-  createReservation: async (payload: ReservationCreateRequest): Promise<ReservationResponse> => {
-    const response = await api.post<ReservationResponse>('/api/reservations', payload);
+  getSessionById: async (id: number): Promise<ParkingSession> => {
+    const response = await api.get<ParkingSession>(`/api/parking-sessions/${id}`);
     return response.data;
   },
 
-  approveReservation: async (id: number): Promise<ReservationResponse> => {
-    const response = await api.patch<ReservationResponse>(`/api/reservations/${id}/approve`);
+  getSessionsByStatus: async (status: string): Promise<ParkingSession[]> => {
+    const response = await api.get<ParkingSession[]>(`/api/parking-sessions/status/${status}`);
     return response.data;
   },
 
-  cancelReservation: async (id: number): Promise<ReservationResponse> => {
-    const response = await api.patch<ReservationResponse>(`/api/reservations/${id}/cancel`);
+  checkIn: async (payload: ParkingSession): Promise<ParkingSession> => {
+    const response = await api.post<ParkingSession>('/api/parking-sessions/check-in', payload);
     return response.data;
   },
 
-  // 3. Parking Sessions
-  getSessionById: async (id: number): Promise<ParkingSessionResponse> => {
-    const response = await api.get<ParkingSessionResponse>(`/api/parking-sessions/${id}`);
+  checkOut: async (id: number, exitStaffId: number, exitGateId: number): Promise<ParkingSession> => {
+    const response = await api.put<ParkingSession>(`/api/parking-sessions/${id}/check-out`, null, {
+      params: {
+        exitStaffId,
+        exitGateId
+      }
+    });
     return response.data;
   },
 
-  checkIn: async (payload: SessionCheckInRequest): Promise<ParkingSessionResponse> => {
-    const response = await api.post<ParkingSessionResponse>('/api/parking-sessions/check-in', payload);
-    return response.data;
-  },
-
-  checkout: async (id: number): Promise<ParkingSessionResponse> => {
-    const response = await api.post<ParkingSessionResponse>(`/api/parking-sessions/${id}/checkout`);
-    return response.data;
-  },
-
-  // 4. Payment Checkout & Exit Barrier
-  prepareCheckout: async (payload: PaymentCheckoutPrepareRequest): Promise<PaymentCheckoutResponse> => {
-    const response = await api.post<PaymentCheckoutResponse>('/api/payment-checkout/prepare', payload);
-    return response.data;
-  },
-
-  validateExit: async (payload: PaymentExitValidationRequest): Promise<PaymentExitValidationResponse> => {
-    const response = await api.post<PaymentExitValidationResponse>('/api/payment-checkout/validate-exit', payload);
-    return response.data;
-  },
-
-  // 5. Payment Gateways
-  payCash: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
-    const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/cash', payload);
-    return response.data;
-  },
-
-  payMomo: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
-    const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/momo', payload);
-    return response.data;
-  },
-
-  payVnpay: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
-    const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/vnpay', payload);
-    return response.data;
-  },
-
-  confirmPayment: async (gateway: 'cash' | 'momo' | 'vnpay', payload: PaymentGatewayConfirmRequest): Promise<any> => {
-    const response = await api.post<any>(`/api/payment-gateways/${gateway}/confirm`, payload);
-    return response.data;
-  },
-
-  // 6. Transaction History
-  searchTransactions: async (params?: {
-    keyword?: string;
-    status?: string;
-    paymentMethod?: string;
-    page?: number;
-    size?: number;
-  }): Promise<PageResponse<TransactionHistoryResponse>> => {
-    const response = await api.get<PageResponse<TransactionHistoryResponse>>('/api/transaction-history', { params });
-    return response.data;
-  },
-
-  getTransactionSummary: async (): Promise<TransactionHistorySummaryResponse> => {
-    const response = await api.get<TransactionHistorySummaryResponse>('/api/transaction-history/summary');
-    return response.data;
-  },
-
-  getRecentTransactions: async (): Promise<TransactionHistoryResponse[]> => {
-    const response = await api.get<TransactionHistoryResponse[]>('/api/transaction-history/recent');
+  // 3. Slots Management
+  getSlots: async (): Promise<ParkingSlot[]> => {
+    const response = await api.get<ParkingSlot[]>('/api/manager/slots');
     return response.data;
   }
 };

@@ -4,6 +4,7 @@ import { authService } from '../services/authService';
 
 export default function Register() {
   const [fullName, setFullName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -14,13 +15,13 @@ export default function Register() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email || !phone || !password) {
-      setError('Please fill in all fields.');
+    if (!fullName || !username || !email || !phone || !password) {
+      setError('Vui lòng điền đầy đủ các thông tin đăng ký.');
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+      setError('Mật khẩu đăng ký phải chứa ít nhất 8 ký tự.');
       return;
     }
 
@@ -30,11 +31,12 @@ export default function Register() {
     try {
       const response = await authService.register({
         fullName,
+        username,
         email,
         phone,
         password,
       });
-      setSuccess(response.message || 'Registration successful! Redirecting to login...');
+      setSuccess(response.message || 'Đăng ký thành công! Đang chuyển hướng đến trang đăng nhập...');
       setTimeout(() => {
         navigate('/login');
       }, 2000);
@@ -43,7 +45,7 @@ export default function Register() {
       setError(
         err.response?.data?.message || 
         err.message || 
-        'Registration failed. Please try again.'
+        'Đăng ký thất bại. Vui lòng thử lại.'
       );
     } finally {
       setLoading(false);
@@ -51,41 +53,37 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-950 px-4 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
-      {/* Decorative Blobs */}
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl -z-10"></div>
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl -z-10"></div>
-
-      <div className="max-w-md w-full space-y-8 bg-slate-900/50 backdrop-blur-xl border border-slate-800 p-8 rounded-3xl shadow-2xl relative z-10">
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="max-w-md w-full space-y-6 bg-white border border-slate-200 p-8 rounded-2xl shadow-xl">
         <div className="text-center">
-          <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center font-bold text-white text-2xl shadow-lg shadow-indigo-500/35 mx-auto mb-4">
+          <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white text-xl shadow-md mx-auto mb-4">
             P
           </div>
-          <h2 className="text-3xl font-extrabold tracking-tight text-white">
-            Register Account
+          <h2 className="text-2xl font-bold tracking-tight text-slate-800">
+            Đăng Ký Khách Hàng
           </h2>
-          <p className="mt-2 text-sm text-slate-400">
-            Create a new customer account for parking reservations
+          <p className="mt-1.5 text-sm text-slate-500">
+            Tạo tài khoản mới để tham gia quản lý/sử dụng bãi đỗ xe
           </p>
         </div>
 
         {error && (
-          <div className="bg-rose-950/40 border border-rose-500/30 text-rose-300 px-4 py-3 rounded-xl text-sm relative" role="alert">
-            <span className="block sm:inline">{error}</span>
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl text-sm" role="alert">
+            <span className="block">{error}</span>
           </div>
         )}
 
         {success && (
-          <div className="bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 px-4 py-3 rounded-xl text-sm relative" role="alert">
-            <span className="block sm:inline">{success}</span>
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm" role="alert">
+            <span className="block">{success}</span>
           </div>
         )}
 
-        <form className="mt-8 space-y-4" onSubmit={handleRegister}>
-          <div className="space-y-4">
+        <form className="space-y-4" onSubmit={handleRegister}>
+          <div className="space-y-3">
             <div>
-              <label htmlFor="full-name" className="block text-xs font-semibold uppercase text-slate-400 tracking-wider mb-2">
-                Full Name
+              <label htmlFor="full-name" className="block text-xs font-bold uppercase text-slate-500 tracking-wider mb-1.5">
+                Họ và tên
               </label>
               <input
                 id="full-name"
@@ -94,13 +92,28 @@ export default function Register() {
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition duration-200"
-                placeholder="John Doe"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
+                placeholder="Nguyễn Văn A"
               />
             </div>
             <div>
-              <label htmlFor="email" className="block text-xs font-semibold uppercase text-slate-400 tracking-wider mb-2">
-                Email Address
+              <label htmlFor="username" className="block text-xs font-bold uppercase text-slate-500 tracking-wider mb-1.5">
+                Tên đăng nhập (Username)
+              </label>
+              <input
+                id="username"
+                name="username"
+                type="text"
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
+                placeholder="van_a_nguyen"
+              />
+            </div>
+            <div>
+              <label htmlFor="email" className="block text-xs font-bold uppercase text-slate-500 tracking-wider mb-1.5">
+                Địa chỉ Email
               </label>
               <input
                 id="email"
@@ -109,13 +122,13 @@ export default function Register() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition duration-200"
-                placeholder="customer@example.com"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
+                placeholder="example@example.com"
               />
             </div>
             <div>
-              <label htmlFor="phone" className="block text-xs font-semibold uppercase text-slate-400 tracking-wider mb-2">
-                Phone Number
+              <label htmlFor="phone" className="block text-xs font-bold uppercase text-slate-500 tracking-wider mb-1.5">
+                Số điện thoại
               </label>
               <input
                 id="phone"
@@ -124,13 +137,13 @@ export default function Register() {
                 required
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition duration-200"
-                placeholder="0901234567"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
+                placeholder="0912345678"
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-xs font-semibold uppercase text-slate-400 tracking-wider mb-2">
-                Password (min 8 chars)
+              <label htmlFor="password" className="block text-xs font-bold uppercase text-slate-500 tracking-wider mb-1.5">
+                Mật khẩu (Tối thiểu 8 ký tự)
               </label>
               <input
                 id="password"
@@ -139,7 +152,7 @@ export default function Register() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition duration-200"
+                className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition"
                 placeholder="••••••••"
               />
             </div>
@@ -149,24 +162,24 @@ export default function Register() {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-3.5 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-600/20"
+              className="w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-indigo-600/10"
             >
               {loading ? (
                 <div className="flex items-center space-x-2">
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  <span>Registering...</span>
+                  <span>Đang đăng ký...</span>
                 </div>
               ) : (
-                'Register'
+                'Đăng ký tài khoản'
               )}
             </button>
           </div>
         </form>
 
-        <div className="text-center text-sm text-slate-500 pt-4 border-t border-slate-800/40">
-          Already have an account?{' '}
-          <Link to="/login" className="font-semibold text-indigo-400 hover:text-indigo-300 transition duration-200">
-            Sign in
+        <div className="text-center text-sm text-slate-500 pt-4 border-t border-slate-100">
+          Đã có tài khoản?{' '}
+          <Link to="/login" className="font-semibold text-indigo-600 hover:underline">
+            Đăng nhập
           </Link>
         </div>
       </div>
