@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { parkingService } from '../services/parkingService';
-import { authService } from '../services/authService';
+import Header from '../components/Header';
 
 export default function ParkingSessions() {
-  const currentUser = authService.getCurrentUser();
 
   // Check-in Form State
   const [vehicleId, setVehicleId] = useState('1');
@@ -13,9 +11,9 @@ export default function ParkingSessions() {
   const [ticketCode, setTicketCode] = useState('');
   const [checkInMsg, setCheckInMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Staff configuration for Checkout
-  const [exitStaffId, setExitStaffId] = useState('1');
-  const [exitGateId, setExitGateId] = useState('1');
+  // Checkout Option States
+  const [lostTicket, setLostTicket] = useState(false);
+  const [overtimeMinutes, setOvertimeMinutes] = useState('0');
   const [checkoutMsg, setCheckoutMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Queries
@@ -31,7 +29,7 @@ export default function ParkingSessions() {
     onSuccess: (res) => {
       setCheckInMsg({
         type: 'success',
-        text: `Cho xe vào bãi thành công! Mã vé: ${res.ticketCode} (Vị trí đỗ: #${res.slotId}).`,
+        text: `Cho xe vào bãi thành công! Mã vé: ${res.ticketCode} (Vị trí đỗ: ${res.slotCode || `#${res.slotId}`}).`,
       });
       setTicketCode('');
       refetchActiveSessions();
@@ -46,8 +44,8 @@ export default function ParkingSessions() {
 
   // Checkout Mutation
   const checkOutMutation = useMutation({
-    mutationFn: ({ id, staffId, gateId }: { id: number; staffId: number; gateId: number }) =>
-      parkingService.checkOut(id, staffId, gateId),
+    mutationFn: ({ id, lostTicket, overtimeMinutes }: { id: number; lostTicket: boolean; overtimeMinutes: number }) =>
+      parkingService.checkOut(id, { lostTicket, overtimeMinutes }),
     onSuccess: (res) => {
       setCheckoutMsg({
         type: 'success',
@@ -69,45 +67,19 @@ export default function ParkingSessions() {
     checkInMutation.mutate({
       vehicleId: parseInt(vehicleId, 10),
       slotId: parseInt(slotId, 10),
-      ticketCode: ticketCode || `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
-      status: 'ACTIVE',
+      ticketCode: ticketCode || undefined,
     });
   };
 
   const handleCheckOut = (sessionId: number) => {
     setCheckoutMsg(null);
-    const staffIdVal = parseInt(exitStaffId, 10) || 1;
-    const gateIdVal = parseInt(exitGateId, 10) || 1;
-    checkOutMutation.mutate({ id: sessionId, staffId: staffIdVal, gateId: gateIdVal });
+    const overtimeVal = parseInt(overtimeMinutes, 10) || 0;
+    checkOutMutation.mutate({ id: sessionId, lostTicket, overtimeMinutes: overtimeVal });
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white shadow-sm">
-              P
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800 tracking-tight">
-                Cho xe ra/vào bãi
-              </h1>
-            </div>
-          </div>
-          <nav className="hidden md:flex space-x-6 text-sm font-semibold">
-            <Link to="/" className="text-slate-500 hover:text-slate-800 transition">Tổng quan</Link>
-            <Link to="/sessions" className="text-indigo-600 border-b-2 border-indigo-500 pb-1">Cho xe ra/vào</Link>
-            <Link to="/gate" className="text-slate-500 hover:text-slate-800 transition">Cổng Barie</Link>
-            <Link to="/logs" className="text-slate-500 hover:text-slate-800 transition">Lịch sử lượt đỗ</Link>
-          </nav>
-          <div className="text-right text-xs">
-            <p className="text-slate-400 font-bold uppercase">Nhân viên trực</p>
-            <p className="font-bold text-slate-800">{currentUser?.username || 'User'}</p>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -133,7 +105,7 @@ export default function ParkingSessions() {
 
               <form onSubmit={handleCheckIn} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ID Xe</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ID Phương tiện</label>
                   <input 
                     type="number"
                     value={vehicleId}
@@ -174,26 +146,28 @@ export default function ParkingSessions() {
               </form>
             </div>
 
-            {/* Quick configurations for Checkout */}
+            {/* Quick configurations for Checkout Options */}
             <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-800">Cài đặt cổng/Nhân viên ra</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mã NV cổng ra</label>
+              <h3 className="text-sm font-bold text-slate-800">Tùy chọn thanh toán ra bãi</h3>
+              <div className="space-y-3">
+                <div className="flex items-center">
                   <input 
-                    type="number"
-                    value={exitStaffId}
-                    onChange={(e) => setExitStaffId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 focus:outline-none"
+                    type="checkbox"
+                    id="lostTicket"
+                    checked={lostTicket}
+                    onChange={(e) => setLostTicket(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
                   />
+                  <label htmlFor="lostTicket" className="ml-2 text-xs font-semibold text-slate-650">Báo mất thẻ/vé xe</label>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mã cổng ra</label>
+                  <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Thời gian đỗ quá hạn (phút)</label>
                   <input 
                     type="number"
-                    value={exitGateId}
-                    onChange={(e) => setExitGateId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 text-xs text-slate-800 focus:outline-none"
+                    value={overtimeMinutes}
+                    min="0"
+                    onChange={(e) => setOvertimeMinutes(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
                   />
                 </div>
               </div>
@@ -233,7 +207,7 @@ export default function ParkingSessions() {
                     <thead>
                       <tr className="text-left text-slate-400 font-bold uppercase tracking-wider">
                         <th className="pb-3 font-semibold">Mã vé</th>
-                        <th className="pb-3 font-semibold">ID Xe</th>
+                        <th className="pb-3 font-semibold">Biển số</th>
                         <th className="pb-3 font-semibold">Vị trí</th>
                         <th className="pb-3 font-semibold">Giờ vào</th>
                         <th className="pb-3 font-semibold text-right">Thao tác</th>
@@ -241,16 +215,19 @@ export default function ParkingSessions() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {activeSessions.map((session) => (
-                        <tr key={session.sessionId} className="hover:bg-slate-50/50">
+                        <tr key={session.id || session.sessionId} className="hover:bg-slate-50/50">
                           <td className="py-3 font-bold text-slate-800">{session.ticketCode}</td>
-                          <td className="py-3 text-slate-600">#{session.vehicleId}</td>
-                          <td className="py-3 text-slate-600">#{session.slotId}</td>
+                          <td className="py-3 text-slate-600">{session.licensePlate || `Xe #${session.vehicleId}`}</td>
+                          <td className="py-3 text-slate-600">{session.slotCode || `Slot #${session.slotId}`}</td>
                           <td className="py-3 text-slate-400">
                             {session.entryTime ? new Date(session.entryTime).toLocaleString('vi-VN') : '-'}
                           </td>
                           <td className="py-3 text-right">
                             <button
-                              onClick={() => session.sessionId && handleCheckOut(session.sessionId)}
+                              onClick={() => {
+                                const idVal = session.id || session.sessionId;
+                                if (idVal) handleCheckOut(idVal);
+                              }}
                               disabled={checkOutMutation.isPending}
                               className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold transition disabled:opacity-50 text-[11px]"
                             >

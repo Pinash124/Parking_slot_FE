@@ -1,35 +1,38 @@
 // Authentication DTOs
 export interface AuthLoginRequest {
-  usernameOrEmail: string;
+  email: string;
   password?: string;
 }
 
-export interface AuthResponse {
-  message: string;
+export interface OtpResponse {
   email: string;
-  username: string;
-  role: string;
+  message: string;
 }
 
 export interface AuthRegistrationRequest {
   fullName: string;
-  username: string;
   email: string;
   phone?: string | null;
   password?: string;
 }
 
-export interface ForgotPasswordRequest {
+export interface VerifyOtpRequest {
   email: string;
+  otp: string;
 }
 
-export interface PasswordResetResponse {
-  message: string;
-  resetLink?: string | null;
+export interface AuthLoginResponse {
+  accessToken: string;
+  tokenType: string;
+  expiresAt: string;
+  userId: number;
+  fullName: string;
+  email: string;
+  role: string;
 }
 
-export interface ResetPasswordRequest {
-  token: string;
+export interface ChangePasswordRequest {
+  oldPassword?: string;
   newPassword?: string;
 }
 
@@ -50,12 +53,29 @@ export interface ManagerOverviewReport {
   peakHours?: Record<string, number> | null;
 }
 
+export interface DashboardOverviewResponse {
+  totalReservations: number;
+  pendingReservations: number;
+  approvedReservations: number;
+  activeSessions: number;
+  availableSlots: number;
+  occupiedSlots: number;
+  reservedSlots: number;
+  pendingPayments: number;
+  completedPayments: number;
+  todayRevenue: number;
+  totalTransactions: number;
+}
+
 // Parking Session DTO
 export interface ParkingSession {
   sessionId?: number;
+  id?: number;
   reservationId?: number | null;
   vehicleId: number;
+  licensePlate?: string;
   slotId: number;
+  slotCode?: string;
   entryStaffId?: number | null;
   exitStaffId?: number | null;
   entryGateId?: number | null;
@@ -66,13 +86,13 @@ export interface ParkingSession {
   parkingFee?: number | null;
   penaltyFee?: number | null;
   totalFee?: number | null;
-  status: 'CREATED' | 'ACTIVE' | 'OVERDUE' | 'VIOLATION' | 'CANCELLED' | 'PAYMENT_PENDING' | 'COMPLETED' | 'CLOSED';
+  status: 'CREATED' | 'ACTIVE' | 'OVERDUE' | 'VIOLATION' | 'CANCELLED' | 'PAYMENT_PENDING' | 'COMPLETED' | 'CLOSED' | 'CHECKED_OUT';
 }
 
 // Parking Slot
 export interface ParkingSlot {
   slotId: number;
-  slotNumber: string;
+  slotCode: string;
   status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE' | 'LOCKED';
   vehicleTypeId: number;
   zoneId?: number;

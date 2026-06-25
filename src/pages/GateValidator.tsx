@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { parkingService } from '../services/parkingService';
-import { authService } from '../services/authService';
+import Header from '../components/Header';
 
 export default function GateValidator() {
-  const currentUser = authService.getCurrentUser();
   const [searchQuery, setSearchQuery] = useState('');
   const [validationResult, setValidationResult] = useState<any | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -24,14 +22,15 @@ export default function GateValidator() {
     try {
       const sessions = await parkingService.getAllSessions();
       
-      // Tìm lượt đỗ mới nhất khớp với mã vé, ID lượt đỗ hoặc ID xe
+      // Tìm lượt đỗ mới nhất khớp với mã vé, ID lượt đỗ hoặc biển số
       const matchingSession = sessions
         .filter(s => 
           s.ticketCode?.toLowerCase() === searchQuery.trim().toLowerCase() || 
-          s.sessionId?.toString() === searchQuery.trim() || 
+          (s.id || s.sessionId)?.toString() === searchQuery.trim() || 
+          s.licensePlate?.toLowerCase() === searchQuery.trim().toLowerCase() ||
           s.vehicleId?.toString() === searchQuery.trim()
         )
-        .sort((a, b) => (b.sessionId || 0) - (a.sessionId || 0))[0];
+        .sort((a, b) => (b.id || b.sessionId || 0) - (a.id || a.sessionId || 0))[0];
 
       if (!matchingSession) {
         setErrorMsg('Không tìm thấy lượt đỗ tương ứng với từ khóa đã nhập.');
@@ -39,12 +38,14 @@ export default function GateValidator() {
         return;
       }
 
-      const isCompleted = matchingSession.status === 'COMPLETED';
+      const isCompleted = matchingSession.status === 'COMPLETED' || matchingSession.status === 'CHECKED_OUT';
       setValidationResult({
         openBarrier: isCompleted,
         ticketCode: matchingSession.ticketCode,
         vehicleId: matchingSession.vehicleId,
+        licensePlate: matchingSession.licensePlate,
         slotId: matchingSession.slotId,
+        slotCode: matchingSession.slotCode,
         status: matchingSession.status,
         totalFee: matchingSession.totalFee || matchingSession.parkingFee || 0,
         entryTime: matchingSession.entryTime,
@@ -60,31 +61,7 @@ export default function GateValidator() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white shadow-sm">
-              P
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800 tracking-tight">
-                Cổng Barie Cổng Ra
-              </h1>
-            </div>
-          </div>
-          <nav className="hidden md:flex space-x-6 text-sm font-semibold">
-            <Link to="/" className="text-slate-500 hover:text-slate-800 transition">Tổng quan</Link>
-            <Link to="/sessions" className="text-slate-500 hover:text-slate-800 transition">Cho xe ra/vào</Link>
-            <Link to="/gate" className="text-indigo-600 border-b-2 border-indigo-500 pb-1">Cổng Barie</Link>
-            <Link to="/logs" className="text-slate-500 hover:text-slate-800 transition">Lịch sử lượt đỗ</Link>
-          </nav>
-          <div className="text-right text-xs">
-            <p className="text-slate-400 font-bold uppercase">Nhân viên cổng ra</p>
-            <p className="font-bold text-slate-800">{currentUser?.username || 'User'}</p>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -111,15 +88,15 @@ export default function GateValidator() {
             <form onSubmit={handleValidate} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  Nhập mã vé / ID lượt đỗ / ID Xe
+                  Nhập mã vé / ID lượt / Biển số
                 </label>
                 <input 
                   type="text"
                   required
-                  placeholder="Ví dụ: TKT-1234 hoặc 1"
+                  placeholder="Ví dụ: TICKET-2026... hoặc 29A-12345"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none font-bold text-base text-center uppercase tracking-wider"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none font-bold text-sm text-center uppercase tracking-wider"
                 />
               </div>
 
@@ -136,7 +113,7 @@ export default function GateValidator() {
               <p className="font-bold text-slate-700 mb-1">Quy định xuất bãi:</p>
               <ul className="list-disc pl-4 space-y-1">
                 <li>Xe ra phải khớp với biển số / mã vé lúc vào.</li>
-                <li>Lượt gửi xe phải ở trạng thái ĐÃ HOÀN THÀNH (COMPLETED) sau khi thanh toán và checkout tại quầy cashier.</li>
+                <li>Lượt gửi xe phải ở trạng thái ĐÃ CHO RA (CHECKED_OUT) sau khi thanh toán phí tại quầy.</li>
                 <li>Cổng sẽ tự động mở nếu trạng thái hợp lệ.</li>
               </ul>
             </div>
@@ -210,14 +187,16 @@ export default function GateValidator() {
                   </div>
 
                   <div className="bg-slate-50 p-3 border border-slate-200 rounded-xl">
-                    <span className="text-[10px] text-slate-400 block uppercase font-bold">ID Xe / ID Vị trí</span>
-                    <span className="font-bold text-slate-800">Xe #{validationResult.vehicleId} • Slot #{validationResult.slotId}</span>
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Biển số / Vị trí</span>
+                    <span className="font-bold text-slate-800">
+                      {validationResult.licensePlate ? `${validationResult.licensePlate} • ${validationResult.slotCode || `Slot #${validationResult.slotId}`}` : `Xe #${validationResult.vehicleId} • Slot #${validationResult.slotId}`}
+                    </span>
                   </div>
 
                   <div className="bg-slate-50 p-3 border border-slate-200 rounded-xl">
                     <span className="text-[10px] text-slate-400 block uppercase font-bold">Trạng thái lượt đỗ</span>
                     <span className="font-bold text-slate-800">
-                      {validationResult.status}
+                      {validationResult.status === 'CHECKED_OUT' ? 'Đã cho xe ra (CHECKED_OUT)' : validationResult.status}
                     </span>
                   </div>
                 </div>

@@ -1,14 +1,13 @@
 import api from './api';
 import type {
   ParkingSession,
-  ManagerOverviewReport,
-  ParkingSlot
+  DashboardOverviewResponse
 } from '../types/parking';
 
 export const parkingService = {
   // 1. Dashboard Overview
-  getOverviewReport: async (params?: { from?: string; to?: string }): Promise<ManagerOverviewReport> => {
-    const response = await api.get<ManagerOverviewReport>('/api/manager/reports/overview', { params });
+  getOverviewReport: async (): Promise<DashboardOverviewResponse> => {
+    const response = await api.get<DashboardOverviewResponse>('/api/dashboard/overview');
     return response.data;
   },
 
@@ -28,24 +27,13 @@ export const parkingService = {
     return response.data;
   },
 
-  checkIn: async (payload: ParkingSession): Promise<ParkingSession> => {
+  checkIn: async (payload: Partial<ParkingSession>): Promise<ParkingSession> => {
     const response = await api.post<ParkingSession>('/api/parking-sessions/check-in', payload);
     return response.data;
   },
 
-  checkOut: async (id: number, exitStaffId: number, exitGateId: number): Promise<ParkingSession> => {
-    const response = await api.put<ParkingSession>(`/api/parking-sessions/${id}/check-out`, null, {
-      params: {
-        exitStaffId,
-        exitGateId
-      }
-    });
-    return response.data;
-  },
-
-  // 3. Slots Management
-  getSlots: async (): Promise<ParkingSlot[]> => {
-    const response = await api.get<ParkingSlot[]>('/api/manager/slots');
+  checkOut: async (id: number, payload?: { lostTicket?: boolean; overtimeMinutes?: number }): Promise<ParkingSession> => {
+    const response = await api.post<ParkingSession>(`/api/parking-sessions/${id}/checkout`, payload || {});
     return response.data;
   }
 };

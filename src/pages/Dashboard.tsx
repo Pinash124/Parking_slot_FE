@@ -1,14 +1,12 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { parkingService } from '../services/parkingService';
-import { authService } from '../services/authService';
+import type { DashboardOverviewResponse } from '../types/parking';
+import Header from '../components/Header';
 
 export default function Dashboard() {
-  const navigate = useNavigate();
-  const currentUser = authService.getCurrentUser();
-
   // Queries
-  const { data: stats, error: statsError, refetch: refetchStats } = useQuery({
+  const { data: stats, error: statsError, refetch: refetchStats } = useQuery<DashboardOverviewResponse>({
     queryKey: ['dashboardOverview'],
     queryFn: () => parkingService.getOverviewReport(),
     refetchInterval: 10000,
@@ -20,78 +18,33 @@ export default function Dashboard() {
     refetchInterval: 10000,
   });
 
-  const logoutMutation = useMutation({
-    mutationFn: authService.logout,
-    onSuccess: () => {
-      navigate('/login');
-    },
-  });
 
-  const handleLogout = () => {
-    logoutMutation.mutate();
-  };
 
-  const mockStats = {
-    totalCheckIns: 15,
-    totalCheckOuts: 10,
-    revenue: 185000,
-    totalSlots: 60,
+  const mockStats: DashboardOverviewResponse = {
+    totalReservations: 15,
+    pendingReservations: 2,
+    approvedReservations: 13,
+    activeSessions: 5,
     availableSlots: 45,
     occupiedSlots: 15,
     reservedSlots: 0,
-    maintenanceSlots: 0,
-    lockedSlots: 0,
-    occupancyRate: 25,
+    pendingPayments: 1,
+    completedPayments: 10,
+    todayRevenue: 185000,
+    totalTransactions: 11
   };
 
   const displayStats = stats || mockStats;
+  const totalSlots = displayStats.occupiedSlots + displayStats.availableSlots;
+  const occupancyRate = totalSlots === 0 ? 0 : Math.round((displayStats.occupiedSlots * 100) / totalSlots);
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased">
-      {/* Navbar */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white shadow-sm">
-              P
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800 tracking-tight">
-                Hệ Thống Bãi Xe
-              </h1>
-            </div>
-          </div>
-          <nav className="hidden md:flex space-x-6 text-sm font-semibold">
-            <Link to="/" className="text-indigo-600 border-b-2 border-indigo-500 pb-1">Tổng quan</Link>
-            <Link to="/sessions" className="text-slate-500 hover:text-slate-800 transition">Cho xe ra/vào</Link>
-            <Link to="/gate" className="text-slate-500 hover:text-slate-800 transition">Cổng Barie</Link>
-            <Link to="/logs" className="text-slate-500 hover:text-slate-800 transition">Lịch sử lượt đỗ</Link>
-          </nav>
-          <div className="flex items-center space-x-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Tài khoản,</p>
-              <p className="text-sm font-bold text-slate-800">{currentUser?.username || 'Nhân viên'}</p>
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 hover:text-slate-800 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm"
-            >
-              Đăng xuất
-            </button>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         
-        {/* Mobile Navigation Links */}
-        <div className="md:hidden grid grid-cols-3 gap-2 mb-6">
-          <Link to="/sessions" className="bg-white border border-slate-200 text-center py-2 rounded-xl text-xs font-semibold text-slate-600">Cho xe ra/vào</Link>
-          <Link to="/gate" className="bg-white border border-slate-200 text-center py-2 rounded-xl text-xs font-semibold text-slate-600">Cổng Barie</Link>
-          <Link to="/logs" className="bg-white border border-slate-200 text-center py-2 rounded-xl text-xs font-semibold text-slate-600">Lịch sử đỗ</Link>
-        </div>
-
         {/* Dashboard Header Info */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -121,7 +74,7 @@ export default function Dashboard() {
                 {displayStats.occupiedSlots}
               </span>
               <span className="text-slate-400 text-xs font-semibold">
-                / {displayStats.totalSlots || (displayStats.occupiedSlots + displayStats.availableSlots)} chỗ
+                / {totalSlots} chỗ
               </span>
             </div>
             <p className="text-emerald-600 text-xs font-semibold mt-2.5 flex items-center">
@@ -130,25 +83,25 @@ export default function Dashboard() {
             </p>
           </div>
 
-          {/* Card 2: Check-ins today */}
+          {/* Card 2: Reservations */}
           <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Lượt vào hôm nay</span>
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Lượt đặt chỗ</span>
             <div className="flex items-baseline space-x-1.5 mt-3">
-              <span className="text-3xl font-extrabold text-indigo-600">{displayStats.totalCheckIns}</span>
+              <span className="text-3xl font-extrabold text-indigo-600">{displayStats.totalReservations}</span>
               <span className="text-slate-400 text-xs font-semibold">lượt</span>
             </div>
-            <p className="text-slate-400 text-xs mt-2.5">Tổng số lượt xe vào bãi</p>
+            <p className="text-slate-400 text-xs mt-2.5">Đã duyệt: {displayStats.approvedReservations}</p>
           </div>
 
-          {/* Card 3: Check-outs today */}
+          {/* Card 3: Check-outs/Payments */}
           <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm">
-            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Lượt ra hôm nay</span>
+            <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Đã thanh toán ra bãi</span>
             <div className="flex items-baseline space-x-1.5 mt-3">
-              <span className="text-3xl font-extrabold text-purple-600">{displayStats.totalCheckOuts}</span>
+              <span className="text-3xl font-extrabold text-purple-600">{displayStats.completedPayments}</span>
               <span className="text-slate-400 text-xs font-semibold">lượt</span>
             </div>
             <p className="text-slate-400 text-xs mt-2.5">
-              Đã thu phí và cho xe ra bãi
+              Chờ thanh toán: {displayStats.pendingPayments}
             </p>
           </div>
 
@@ -157,12 +110,12 @@ export default function Dashboard() {
             <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider block">Doanh Thu Hôm Nay</span>
             <div className="flex items-baseline space-x-1 mt-3">
               <span className="text-2xl font-extrabold text-emerald-600">
-                {Number(displayStats.revenue).toLocaleString()}
+                {Number(displayStats.todayRevenue).toLocaleString()}
               </span>
               <span className="text-slate-550 text-xs font-bold ml-1">đ</span>
             </div>
             <p className="text-slate-400 text-xs mt-2.5">
-              Tỉ lệ lấp đầy: {displayStats.occupancyRate}%
+              Tỉ lệ lấp đầy: {occupancyRate}%
             </p>
           </div>
         </div>
@@ -237,18 +190,18 @@ export default function Dashboard() {
               <div className="space-y-3 flex-1 overflow-y-auto max-h-[360px] pr-1">
                 {activeSessions.slice(0, 8).map((session) => (
                   <div 
-                    key={session.sessionId} 
-                    className="p-3 bg-slate-50 border border-slate-250 rounded-xl flex justify-between items-center text-xs"
+                    key={session.id || session.sessionId} 
+                    className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center text-xs"
                   >
                     <div>
                       <p className="font-bold text-slate-700">Mã vé: {session.ticketCode}</p>
                       <p className="text-slate-400 text-[10px] mt-0.5">
-                        Vị trí đỗ: #{session.slotId} • Xe: #{session.vehicleId}
+                        Biển số: {session.licensePlate || `Xe #${session.vehicleId}`} • Vị trí: {session.slotCode || `Slot #${session.slotId}`}
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-700">
-                        Đang hoạt động
+                        Đang đỗ
                       </span>
                       <p className="text-slate-400 text-[9px] mt-0.5">
                         {session.entryTime ? new Date(session.entryTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : ''}

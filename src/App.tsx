@@ -7,12 +7,13 @@ import { authService } from './services/authService';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import DriverDashboard from './pages/DriverDashboard';
+import ManagerDashboard from './pages/ManagerDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import ParkingSessions from './pages/ParkingSessions';
 import GateValidator from './pages/GateValidator';
 import ParkingLogs from './pages/ParkingLogs';
-import ForgotPassword from './pages/ForgotPassword';
-import ResetPassword from './pages/ResetPassword';
-import OAuth2Callback from './pages/OAuth2Callback';
+import ChangePassword from './pages/ChangePassword';
 
 // Create TanStack Query Client
 const queryClient = new QueryClient({
@@ -37,6 +38,21 @@ function ProtectedRoute({ children }: ProtectedRouteProps) {
   return <>{children}</>;
 }
 
+function DashboardRoute() {
+  const currentUser = authService.getCurrentUser();
+  const role = currentUser?.role?.toUpperCase();
+  if (role === 'CUSTOMER' || role === 'USER') {
+    return <DriverDashboard />;
+  }
+  if (role === 'MANAGER') {
+    return <ManagerDashboard />;
+  }
+  if (role === 'ADMIN' || role === 'ADMINISTRATOR') {
+    return <AdminDashboard />;
+  }
+  return <Dashboard />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -45,16 +61,21 @@ export default function App() {
           {/* Public Auth Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/oauth2/callback" element={<OAuth2Callback />} />
 
           {/* Protected Parking System Operations */}
           <Route 
             path="/" 
             element={
               <ProtectedRoute>
-                <Dashboard />
+                <DashboardRoute />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/change-password" 
+            element={
+              <ProtectedRoute>
+                <ChangePassword />
               </ProtectedRoute>
             } 
           />

@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
 import { parkingService } from '../services/parkingService';
-import { authService } from '../services/authService';
+import Header from '../components/Header';
 
 export default function ParkingLogs() {
-  const currentUser = authService.getCurrentUser();
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -17,8 +15,8 @@ export default function ParkingLogs() {
   });
 
   // Calculate stats based on fetched sessions
-  const totalCompleted = sessions?.filter(s => s.status === 'COMPLETED').length || 0;
-  const totalRevenue = sessions?.filter(s => s.status === 'COMPLETED').reduce((acc, curr) => acc + (curr.totalFee || curr.parkingFee || 0), 0) || 0;
+  const totalCompleted = sessions?.filter(s => s.status === 'COMPLETED' || s.status === 'CHECKED_OUT').length || 0;
+  const totalRevenue = sessions?.filter(s => s.status === 'COMPLETED' || s.status === 'CHECKED_OUT').reduce((acc, curr) => acc + (curr.totalFee || curr.parkingFee || 0), 0) || 0;
   const totalActive = sessions?.filter(s => s.status === 'ACTIVE').length || 0;
 
   // Filter & search logic
@@ -27,44 +25,20 @@ export default function ParkingLogs() {
     if (statusFilter !== 'ALL' && session.status !== statusFilter) {
       return false;
     }
-    // 2. Search Query (Ticket code, slot ID, vehicle ID)
+    // 2. Search Query (Ticket code, slot code, license plate)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       const matchTicket = session.ticketCode?.toLowerCase().includes(q);
-      const matchSlot = session.slotId?.toString() === q;
-      const matchVehicle = session.vehicleId?.toString() === q;
-      return matchTicket || matchSlot || matchVehicle;
+      const matchSlot = session.slotCode?.toLowerCase().includes(q) || session.slotId?.toString() === q;
+      const matchPlate = session.licensePlate?.toLowerCase().includes(q) || session.vehicleId?.toString() === q;
+      return matchTicket || matchSlot || matchPlate;
     }
     return true;
   }) || [];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased">
-      {/* Header */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-white shadow-sm">
-              P
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-slate-800 tracking-tight">
-                Lịch sử lượt đỗ xe
-              </h1>
-            </div>
-          </div>
-          <nav className="hidden md:flex space-x-6 text-sm font-semibold">
-            <Link to="/" className="text-slate-500 hover:text-slate-800 transition">Tổng quan</Link>
-            <Link to="/sessions" className="text-slate-500 hover:text-slate-800 transition">Cho xe ra/vào</Link>
-            <Link to="/gate" className="text-slate-500 hover:text-slate-800 transition">Cổng Barie</Link>
-            <Link to="/logs" className="text-indigo-600 border-b-2 border-indigo-500 pb-1">Lịch sử lượt đỗ</Link>
-          </nav>
-          <div className="text-right text-xs">
-            <p className="text-slate-400 font-bold uppercase">Nhân viên trực</p>
-            <p className="font-bold text-slate-800">{currentUser?.username || 'User'}</p>
-          </div>
-        </div>
-      </header>
+      <Header />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -137,19 +111,19 @@ export default function ParkingLogs() {
                 Đang hoạt động (ACTIVE)
               </button>
               <button 
-                onClick={() => setStatusFilter('COMPLETED')}
+                onClick={() => setStatusFilter('CHECKED_OUT')}
                 className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
-                  statusFilter === 'COMPLETED' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  statusFilter === 'CHECKED_OUT' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                Đã hoàn thành (COMPLETED)
+                Đã hoàn thành (CHECKED_OUT)
               </button>
             </div>
 
             <div className="w-full md:w-72">
               <input 
                 type="text"
-                placeholder="Tìm mã vé, ID xe, ID vị trí..."
+                placeholder="Tìm mã vé, biển số, vị trí..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition placeholder-slate-400 text-slate-800"
@@ -177,8 +151,8 @@ export default function ParkingLogs() {
                   <tr className="text-left text-slate-400 font-bold uppercase tracking-wider bg-slate-50/20">
                     <th className="px-6 py-3.5 font-semibold">Mã lượt</th>
                     <th className="px-6 py-3.5 font-semibold">Mã vé</th>
-                    <th className="px-6 py-3.5 font-semibold">ID Xe</th>
-                    <th className="px-6 py-3.5 font-semibold">ID Vị trí</th>
+                    <th className="px-6 py-3.5 font-semibold">Biển số xe</th>
+                    <th className="px-6 py-3.5 font-semibold">Vị trí đỗ</th>
                     <th className="px-6 py-3.5 font-semibold">Giờ vào</th>
                     <th className="px-6 py-3.5 font-semibold">Giờ ra</th>
                     <th className="px-6 py-3.5 font-semibold">Phí đỗ</th>
@@ -187,11 +161,11 @@ export default function ParkingLogs() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredSessions.map((session) => (
-                    <tr key={session.sessionId} className="hover:bg-slate-50/50">
-                      <td className="px-6 py-3.5 font-mono text-slate-500">#{session.sessionId}</td>
+                    <tr key={session.id || session.sessionId} className="hover:bg-slate-50/50">
+                      <td className="px-6 py-3.5 font-mono text-slate-500">#{session.id || session.sessionId}</td>
                       <td className="px-6 py-3.5 font-bold text-slate-800">{session.ticketCode}</td>
-                      <td className="px-6 py-3.5 text-slate-600">Xe #{session.vehicleId}</td>
-                      <td className="px-6 py-3.5 text-slate-600">Khu #{session.slotId}</td>
+                      <td className="px-6 py-3.5 text-slate-600">{session.licensePlate || `Xe #${session.vehicleId}`}</td>
+                      <td className="px-6 py-3.5 text-slate-600">{session.slotCode || `Slot #${session.slotId}`}</td>
                       <td className="px-6 py-3.5 text-slate-500">
                         {session.entryTime ? new Date(session.entryTime).toLocaleString('vi-VN') : '-'}
                       </td>
@@ -203,13 +177,13 @@ export default function ParkingLogs() {
                       </td>
                       <td className="px-6 py-3.5">
                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          session.status === 'COMPLETED' 
+                          session.status === 'COMPLETED' || session.status === 'CHECKED_OUT'
                             ? 'bg-emerald-100 text-emerald-700' 
                             : session.status === 'ACTIVE'
                               ? 'bg-indigo-100 text-indigo-700'
                               : 'bg-amber-100 text-amber-700'
                         }`}>
-                          {session.status === 'COMPLETED' ? 'Hoàn thành' : session.status === 'ACTIVE' ? 'Đang đỗ' : session.status}
+                          {session.status === 'COMPLETED' || session.status === 'CHECKED_OUT' ? 'Hoàn thành' : session.status === 'ACTIVE' ? 'Đang đỗ' : session.status}
                         </span>
                       </td>
                     </tr>
