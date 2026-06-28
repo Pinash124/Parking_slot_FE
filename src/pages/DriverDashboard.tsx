@@ -1,31 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import { authService } from '../services/authService';
 import { parkingService } from '../services/parkingService';
-import api from '../services/api';
-
-// Simple representation of LocalStorage mock storage to maintain session state for Driver UI simulations
-interface SimBooking {
-  id: number;
-  licensePlate: string;
-  vehicleType: string;
-  zone: string;
-  startTime: string;
-  endTime: string;
-  status: string;
-}
-
-interface SimTicket {
-  ticketCode: string;
-  licensePlate: string;
-  vehicleType: 'CAR' | 'BIKE';
-  slotCode: string;
-  entryTime: string;
-  status: 'PARKED' | 'PAID' | 'LEFT';
-}
+import { userPortalService } from '../services/userPortalService';
+import type {
+  ReservationCreateRequest,
+  FeedbackCreateRequest,
+  SessionCheckInRequest,
+} from '../types/parking';
 
 export default function DriverDashboard() {
+  const queryClient = useQueryClient();
   const currentUser = authService.getCurrentUser();
   const [activeTab, setActiveTab] = useState<'info' | 'booking' | 'ticket' | 'feedback'>('info');
 
@@ -36,70 +22,130 @@ export default function DriverDashboard() {
     refetchInterval: 15000,
   });
 
+  // Load pricing policies for rates view
+  const { data: pricingPolicies = [] } = useQuery({
+    queryKey: ['pricingPolicies'],
+    queryFn: () => parkingService.getPricingPolicies(),
+  });
+
+  // Current active session query
+  const { data: currentSession } = useQuery({
+    queryKey: ['currentSession'],
+    queryFn: () => userPortalService.getCurrentSession(),
+    refetchInterval: 10000,
+    retry: false,
+  });
+
+  // Booking / Reservation history
+  const { data: reservationsData } = useQuery({
+    queryKey: ['myReservations'],
+    queryFn: () => userPortalService.getMyReservations(0, 50),
+  });
+  const bookings = reservationsData?.content || [];
+
+  // My Vehicles
+  const { data: vehicles = [] } = useQuery({
+    queryKey: ['myVehicles'],
+    queryFn: () => userPortalService.getMyVehicles(),
+  });
+
+  // Zones for booking selector
+  const { data: zones = [] } = useQuery({
+    queryKey: ['zones'],
+    queryFn: () => parkingService.getZones(),
+  });
+
+  // Fetch slots to filter available ones for simulate check-in
+  const { data: slots = [] } = useQuery({
+    queryKey: ['slots'],
+    queryFn: () => parkingService.getSlots(),
+  });
+  const availableSlotsList = slots.filter((s) => s.status === 'AVAILABLE');
+
+  // --- MUTATIONS ---
+  const bookingMutation = useMutation({
+    mutationFn: (payload: ReservationCreateRequest) => userPortalService.createReservation(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myReservations'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
+      alert('Đăng ký đặt chỗ trước thành công trên hệ thống!');
+      setSelectedVehicleId('');
+      setSelectedZoneId('');
+      setStartTime('');
+      setEndTime('');
+    },
+    onError: (err: any) => alert('Lỗi đặt chỗ: ' + (err.response?.data?.message || err.message)),
+  });
+
+  const cancelBookingMutation = useMutation({
+    mutationFn: (id: number) => parkingService.cancelReservation(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['myReservations'] });
+      alert('Đã hủy đặt chỗ thành công.');
+    },
+    onError: (err: any) => alert('Lỗi khi hủy: ' + (err.response?.data?.message || err.message)),
+  });
+
+  const checkInMutation = useMutation({
+    mutationFn: (payload: SessionCheckInRequest) =>
+      parkingService.staffCheckIn('GATE_IN_01', payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['currentSession'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
+      queryClient.invalidateQueries({ queryKey: ['slots'] });
+      alert('Simulated Check-in thành công!');
+      setSimulateLicensePlate('');
+      setSimulateSlotId('');
+    },
+    onError: (err: any) => alert('Lỗi Check-in: ' + (err.response?.data?.message || err.message)),
+  });
+
+  const checkoutMutation = useMutation({
+    mutationFn: (id: number) =>
+      parkingService.staffCheckout(id, { lostTicket: false }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['currentSession'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
+      queryClient.invalidateQueries({ queryKey: ['slots'] });
+      alert('Thanh toán thành công! Trạng thái Barie đã mở.');
+      setShowPaymentModal(false);
+    },
+    onError: (err: any) => alert('Lỗi thanh toán: ' + (err.response?.data?.message || err.message)),
+  });
+
+  const submitFeedbackMutation = useMutation({
+    mutationFn: (payload: FeedbackCreateRequest) => parkingService.submitFeedback(payload),
+    onSuccess: () => {
+      alert('Gửi ý kiến phản hồi thành công! Cảm ơn đóng góp của bạn.');
+      setFeedbackContent('');
+    },
+    onError: (err: any) => alert('Lỗi khi gửi phản hồi: ' + (err.response?.data?.message || err.message)),
+  });
+
   // --- STATE FOR BOOKING / RESERVATION ---
-  const [licensePlate, setLicensePlate] = useState('');
-  const [vehicleType, setVehicleType] = useState('CAR');
-  const [zoneId, setZoneId] = useState('1');
+  const [selectedVehicleId, setSelectedVehicleId] = useState('');
+  const [selectedZoneId, setSelectedZoneId] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
-  const [bookings, setBookings] = useState<SimBooking[]>([]);
-  const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
-  const [bookingError, setBookingError] = useState<string | null>(null);
-  const [bookingLoading, setBookingLoading] = useState(false);
 
-  // --- STATE FOR VIRTUAL TICKET ---
-  const [myTicket, setMyTicket] = useState<SimTicket | null>(null);
-  const [ticketLicensePlate, setTicketLicensePlate] = useState('');
-  const [ticketVehicleType, setTicketVehicleType] = useState<'CAR' | 'BIKE'>('CAR');
-  const [ticketCreateMsg, setTicketCreateMsg] = useState<string | null>(null);
-  
-  // --- LIVE BILLING COUNTDOWN ---
-  const [liveDurationStr, setLiveDurationStr] = useState('00g 00p 00s');
-  const [liveFee, setLiveFee] = useState(0);
+  // --- STATE FOR CHECKIN SIMULATION ---
+  const [simulateLicensePlate, setSimulateLicensePlate] = useState('');
+  const [simulateSlotId, setSimulateSlotId] = useState('');
 
   // --- PAYMENT MODAL ---
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'QR' | 'WALLET' | 'BANK' | 'CASH'>('QR');
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
-  const [paymentSuccess, setPaymentSuccess] = useState(false);
 
   // --- FEEDBACK ---
-  const [feedbackType, setFeedbackType] = useState('LOST_TICKET');
+  const [feedbackCategory, setFeedbackCategory] = useState('OTHER');
   const [feedbackContent, setFeedbackContent] = useState('');
-  const [feedbackSuccess, setFeedbackSuccess] = useState(false);
-  const [feedbackLoading, setFeedbackLoading] = useState(false);
 
-  // Load Sim data from LocalStorage
+  // Live billing timer
+  const [liveDurationStr, setLiveDurationStr] = useState('00g 00p 00s');
   useEffect(() => {
-    const savedBookings = localStorage.getItem('sim_bookings');
-    if (savedBookings) {
-      setBookings(JSON.parse(savedBookings));
-    }
-
-    const savedTicket = localStorage.getItem('sim_ticket');
-    if (savedTicket) {
-      setMyTicket(JSON.parse(savedTicket));
-    } else {
-      // Auto-populate a default active ticket for demonstration if none exists
-      const defaultTicket: SimTicket = {
-        ticketCode: 'TICKET-99281',
-        licensePlate: '30A-999.88',
-        vehicleType: 'CAR',
-        slotCode: 'A-102',
-        entryTime: new Date(Date.now() - 3.5 * 60 * 60 * 1000).toISOString(), // 3.5 hours ago
-        status: 'PARKED',
-      };
-      setMyTicket(defaultTicket);
-      localStorage.setItem('sim_ticket', JSON.stringify(defaultTicket));
-    }
-  }, []);
-
-  // Update Live Fee & Duration counter
-  useEffect(() => {
-    if (!myTicket || myTicket.status !== 'PARKED') return;
-
+    if (!currentSession?.entryTime) return;
     const interval = setInterval(() => {
-      const entryDate = new Date(myTicket.entryTime);
+      const entryDate = new Date(currentSession.entryTime!);
       const diffMs = Date.now() - entryDate.getTime();
       
       const hours = Math.floor(diffMs / (3600 * 1000));
@@ -110,174 +156,48 @@ export default function DriverDashboard() {
       const mStr = mins < 10 ? '0' + mins : mins;
       const sStr = secs < 10 ? '0' + secs : secs;
       setLiveDurationStr(`${hStr}g ${mStr}p ${sStr}s`);
-
-      // Price calculation: 30K/hr for car, 10K/hr for bike. Min 1 hour.
-      const ratePerHour = myTicket.vehicleType === 'CAR' ? 30000 : 10000;
-      const totalHours = Math.max(1, diffMs / (3600 * 1000));
-      // Round to nearest 500 VND
-      const fee = Math.round((totalHours * ratePerHour) / 500) * 500;
-      setLiveFee(fee);
     }, 1000);
-
     return () => clearInterval(interval);
-  }, [myTicket]);
+  }, [currentSession]);
 
-  // Handle Booking form submission
-  const handleBookingSubmit = async (e: React.FormEvent) => {
+  const handleBookingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!licensePlate || !startTime || !endTime) {
-      setBookingError('Vui lòng nhập đầy đủ các trường thông tin.');
+    if (!selectedVehicleId || !selectedZoneId || !startTime || !endTime) {
+      alert('Vui lòng chọn xe, khu vực đỗ và thời gian.');
       return;
     }
-
-    setBookingLoading(true);
-    setBookingError(null);
-    setBookingSuccess(null);
-
-    const startLocal = new Date(startTime).toISOString();
-    const endLocal = new Date(endTime).toISOString();
-
-    const payload = {
-      userId: currentUser ? 1 : 1, // Simulated Customer User ID
-      vehicleId: 1, // Preseeded Vehicle ID
-      zoneId: parseInt(zoneId, 10),
-      startTime: startLocal,
-      endTime: endLocal
-    };
-
-    try {
-      // 1. Try real backend API
-      const response = await api.post('/api/reservations', payload);
-      const newBook: SimBooking = {
-        id: response.data.id,
-        licensePlate: response.data.licensePlate || licensePlate,
-        vehicleType: vehicleType,
-        zone: response.data.zoneName || (zoneId === '1' ? 'Khu A (Dưới hầm)' : 'Khu B (Ngoài trời)'),
-        startTime: startTime,
-        endTime: endTime,
-        status: response.data.status || 'APPROVED'
-      };
-      const updated = [newBook, ...bookings];
-      setBookings(updated);
-      localStorage.setItem('sim_bookings', JSON.stringify(updated));
-      setBookingSuccess('Đăng ký đặt chỗ trước thành công trên hệ thống!');
-      // Reset form
-      setLicensePlate('');
-      setStartTime('');
-      setEndTime('');
-    } catch (err: any) {
-      console.warn('Backend reservations call failed, falling back to LocalStorage simulation. Reason:', err.message);
-      
-      // 2. Simulation fallback
-      const mockId = Math.floor(Math.random() * 100000);
-      const newBook: SimBooking = {
-        id: mockId,
-        licensePlate: licensePlate.toUpperCase(),
-        vehicleType: vehicleType,
-        zone: zoneId === '1' ? 'Khu A (Tầng hầm)' : zoneId === '2' ? 'Khu B (Tầng lửng)' : 'Khu C (Mặt đất)',
-        startTime: startTime.replace('T', ' '),
-        endTime: endTime.replace('T', ' '),
-        status: 'XÁC NHẬN (APPROVED)'
-      };
-      const updated = [newBook, ...bookings];
-      setBookings(updated);
-      localStorage.setItem('sim_bookings', JSON.stringify(updated));
-      setBookingSuccess('Đăng ký đặt chỗ trước thành công (Simulated)!');
-      // Reset form
-      setLicensePlate('');
-      setStartTime('');
-      setEndTime('');
-    } finally {
-      setBookingLoading(false);
-    }
+    bookingMutation.mutate({
+      vehicleId: parseInt(selectedVehicleId, 10),
+      zoneId: parseInt(selectedZoneId, 10),
+      startTime: new Date(startTime).toISOString(),
+      endTime: new Date(endTime).toISOString(),
+    });
   };
 
-  // Cancel Booking
-  const handleCancelBooking = async (id: number) => {
-    try {
-      await api.patch(`/api/reservations/${id}/cancel`);
-    } catch (err) {
-      console.warn('Real cancel failed, applying simulator cancel locally');
-    }
-    const updated = bookings.map(b => b.id === id ? { ...b, status: 'ĐÃ HỦY' } : b);
-    setBookings(updated);
-    localStorage.setItem('sim_bookings', JSON.stringify(updated));
-  };
-
-  // Generate / Simulated Entrance check-in ticket (Simulation trigger)
-  const handleGenerateTicket = (e: React.FormEvent) => {
+  const handleSimulateCheckIn = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ticketLicensePlate) return;
-
-    const newTicket: SimTicket = {
-      ticketCode: 'TICKET-' + Math.floor(10000 + Math.random() * 90000),
-      licensePlate: ticketLicensePlate.toUpperCase(),
-      vehicleType: ticketVehicleType,
-      slotCode: ['A-101', 'B-205', 'C-012', 'A-204'][Math.floor(Math.random() * 4)],
-      entryTime: new Date().toISOString(),
-      status: 'PARKED',
-    };
-    setMyTicket(newTicket);
-    localStorage.setItem('sim_ticket', JSON.stringify(newTicket));
-    setTicketCreateMsg('Nhận vé xe và đỗ xe thành công!');
-    setTicketLicensePlate('');
-    setTimeout(() => setTicketCreateMsg(null), 3000);
-  };
-
-  // Open checkout and payment flow
-  const handleCheckoutPayment = () => {
-    if (!myTicket) return;
-    setPaymentSuccess(false);
-    setShowPaymentModal(true);
-  };
-
-  // Simulate Payment transaction processing
-  const executePayment = () => {
-    setPaymentProcessing(true);
-    setTimeout(() => {
-      setPaymentProcessing(false);
-      setPaymentSuccess(true);
-      if (myTicket) {
-        const updatedTicket: SimTicket = {
-          ...myTicket,
-          status: 'PAID'
-        };
-        setMyTicket(updatedTicket);
-        localStorage.setItem('sim_ticket', JSON.stringify(updatedTicket));
-      }
-    }, 2000);
-  };
-
-  // Simulate vehicle leaving barrier
-  const handleVehicleExit = () => {
-    if (myTicket) {
-      const updatedTicket: SimTicket = {
-        ...myTicket,
-        status: 'LEFT'
-      };
-      setMyTicket(updatedTicket);
-      localStorage.setItem('sim_ticket', JSON.stringify(updatedTicket));
+    if (!simulateLicensePlate || !simulateSlotId) {
+      alert('Vui lòng nhập biển số xe và chọn ô đỗ.');
+      return;
     }
-    setShowPaymentModal(false);
+    checkInMutation.mutate({
+      licensePlate: simulateLicensePlate.trim().toUpperCase(),
+      slotId: parseInt(simulateSlotId, 10),
+    });
   };
 
-  // Handle Feedback Submission
   const handleFeedbackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!feedbackContent) return;
-
-    setFeedbackLoading(true);
-    setTimeout(() => {
-      setFeedbackLoading(false);
-      setFeedbackSuccess(true);
-      setFeedbackContent('');
-      setTimeout(() => setFeedbackSuccess(false), 3000);
-    }, 1000);
+    submitFeedbackMutation.mutate({
+      category: feedbackCategory,
+      content: feedbackContent,
+      sessionId: currentSession?.sessionId,
+    });
   };
 
-  // Slot calculations from real API stats or default mockup numbers
-  const availableSlots = stats?.availableSlots ?? 34;
-  const occupiedSlots = stats?.occupiedSlots ?? 16;
+  const availableSlots = stats?.availableSlots ?? 0;
+  const occupiedSlots = stats?.occupiedSlots ?? 0;
   const totalSlots = availableSlots + occupiedSlots;
   const fillRate = totalSlots === 0 ? 0 : Math.round((occupiedSlots * 100) / totalSlots);
 
@@ -287,16 +207,16 @@ export default function DriverDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Welcome Section */}
-        <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 rounded-3xl p-6 md:p-8 text-white shadow-xl mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="bg-blue-600 rounded-3xl p-6 md:p-8 text-white shadow-xl mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Xin chào, {currentUser?.username || 'Khách hàng'}!</h2>
-            <p className="mt-1.5 text-indigo-100 text-sm max-w-xl">
+            <p className="mt-1.5 text-blue-100 text-sm max-w-xl">
               Cổng thông tin lái xe cá nhân. Đặt chỗ trước, nhận vé điện tử, thanh toán và gửi phản hồi bãi đỗ xe tức thời.
             </p>
           </div>
           <div className="bg-white/10 backdrop-blur-md px-4.5 py-3 rounded-2xl border border-white/10 flex items-center space-x-3 text-sm">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-            <span className="font-bold">Bãi đỗ xe 24/7 đang mở cửa</span>
+            <span className="font-bold">Bãi đỗ xe hoạt động 24/7</span>
           </div>
         </div>
 
@@ -305,30 +225,20 @@ export default function DriverDashboard() {
           <button
             onClick={() => setActiveTab('info')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'info'
-                ? 'bg-indigo-50 text-indigo-650'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              activeTab === 'info' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
             }`}
           >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-            </svg>
             Bãi Xe & Bảng Giá
           </button>
           
           <button
             onClick={() => setActiveTab('ticket')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap relative cursor-pointer ${
-              activeTab === 'ticket'
-                ? 'bg-indigo-50 text-indigo-650'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              activeTab === 'ticket' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
             }`}
           >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-            </svg>
             Vé Xe Của Tôi
-            {myTicket && myTicket.status === 'PARKED' && (
+            {currentSession && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
             )}
           </button>
@@ -336,28 +246,18 @@ export default function DriverDashboard() {
           <button
             onClick={() => setActiveTab('booking')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'booking'
-                ? 'bg-indigo-50 text-indigo-650'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              activeTab === 'booking' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
             }`}
           >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
             Đặt Chỗ Trước
           </button>
 
           <button
             onClick={() => setActiveTab('feedback')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'feedback'
-                ? 'bg-indigo-50 text-indigo-650'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+              activeTab === 'feedback' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
             }`}
           >
-            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
             Gửi Phản Hồi
           </button>
         </div>
@@ -365,7 +265,6 @@ export default function DriverDashboard() {
         {/* Tab 1: Info */}
         {activeTab === 'info' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Slot details */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-150 pb-3 flex items-center">
@@ -395,8 +294,8 @@ export default function DriverDashboard() {
                     </div>
                     <div>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Loại xe hỗ trợ</p>
-                      <p className="text-sm font-bold text-slate-800 mt-0.5">Ô tô (Car) & Xe máy (Motorbike)</p>
-                      <p className="text-xs text-slate-400 mt-1">Xe từ 4-7 chỗ, xe máy số và ga thông thường</p>
+                      <p className="text-sm font-bold text-slate-800 mt-0.5">Mọi phương tiện theo thiết lập bãi</p>
+                      <p className="text-xs text-slate-400 mt-1">Hệ thống hỗ trợ đỗ xe theo phân khu riêng biệt</p>
                     </div>
                   </div>
                 </div>
@@ -409,57 +308,37 @@ export default function DriverDashboard() {
                   Bảng Giá Gửi Xe Chi Tiết
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
+                  <table className="w-full text-left border-collapse text-xs">
                     <thead>
-                      <tr className="border-b border-slate-100 text-xs font-bold text-slate-400 uppercase">
-                        <th className="pb-3">Loại Xe</th>
-                        <th className="pb-3 text-right">Phí 1 Giờ Đầu</th>
-                        <th className="pb-3 text-right">Phí Mỗi Giờ Tiếp Theo</th>
-                        <th className="pb-3 text-right">Phí Trọn Gói Ngày (24h)</th>
+                      <tr className="border-b border-slate-100 font-bold text-slate-400 uppercase">
+                        <th className="pb-3">Phân loại / Chính sách</th>
+                        <th className="pb-3 text-right">Phí theo Giờ</th>
+                        <th className="pb-3 text-right">Trọn Ngày (24h)</th>
+                        <th className="pb-3 text-right">Phí Vé Tháng</th>
                       </tr>
                     </thead>
-                    <tbody className="text-sm divide-y divide-slate-100">
-                      <tr className="hover:bg-slate-50 transition">
-                        <td className="py-3.5 flex items-center space-x-2">
-                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
-                          <span className="font-bold text-slate-800">Xe Máy (Motorbike)</span>
-                        </td>
-                        <td className="py-3.5 text-right font-semibold">10.000đ</td>
-                        <td className="py-3.5 text-right font-semibold">5.000đ</td>
-                        <td className="py-3.5 text-right font-bold text-indigo-650">50.000đ</td>
-                      </tr>
-                      <tr className="hover:bg-slate-50 transition">
-                        <td className="py-3.5 flex items-center space-x-2">
-                          <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>
-                          <span className="font-bold text-slate-800">Ô Tô (Car)</span>
-                        </td>
-                        <td className="py-3.5 text-right font-semibold">30.000đ</td>
-                        <td className="py-3.5 text-right font-semibold">15.000đ</td>
-                        <td className="py-3.5 text-right font-bold text-indigo-650">150.000đ</td>
-                      </tr>
+                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                      {pricingPolicies.map((policy) => (
+                        <tr key={policy.id} className="hover:bg-slate-50 transition">
+                          <td className="py-3.5 font-bold text-slate-800">{policy.policyName} ({policy.vehicleTypeName})</td>
+                          <td className="py-3.5 text-right">{(policy.hourlyRate ?? 0).toLocaleString('vi-VN')}đ</td>
+                          <td className="py-3.5 text-right">{(policy.dailyRate ?? 0).toLocaleString('vi-VN')}đ</td>
+                          <td className="py-3.5 text-right text-indigo-650 font-bold">{(policy.monthlyRate ?? 0).toLocaleString('vi-VN')}đ</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
-                </div>
-                <div className="mt-4 p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 text-xs text-indigo-800 flex items-start space-x-2">
-                  <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>
-                    <strong>* Lưu ý:</strong> Phí đỗ xe qua đêm được áp dụng theo biểu phí lũy kế theo giờ. Trường hợp làm mất vé giấy (với khách vãng lai không đặt chỗ trước) sẽ bị phạt 100.000đ theo quy định.
-                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Left/Sidebar: Capacity Stats */}
             <div className="space-y-6">
               <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm text-center">
                 <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Trạng thái chỗ trống</h3>
                 <div className="inline-flex items-center justify-center relative w-36 h-36 mb-4">
-                  {/* Circle outline indicator */}
                   <svg className="w-full h-full transform -rotate-90">
                     <circle cx="72" cy="72" r="60" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
-                    <circle cx="72" cy="72" r="60" className="stroke-indigo-600 transition-all duration-500" strokeWidth="12" fill="transparent"
+                    <circle cx="72" cy="72" r="60" className="stroke-indigo-650 transition-all duration-500" strokeWidth="12" fill="transparent"
                       strokeDasharray={2 * Math.PI * 60}
                       strokeDashoffset={2 * Math.PI * 60 * (1 - fillRate / 100)}
                     />
@@ -488,168 +367,131 @@ export default function DriverDashboard() {
         {/* Tab 2: Ticket / Current Session */}
         {activeTab === 'ticket' && (
           <div className="max-w-4xl mx-auto space-y-6">
-            {!myTicket || myTicket.status === 'LEFT' ? (
+            {!currentSession ? (
               <div className="bg-white border border-slate-200 p-8 rounded-2xl shadow-sm text-center space-y-4">
-                <div className="w-16 h-16 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto">
+                <div className="w-16 h-16 bg-slate-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
                   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                   </svg>
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800">Không có vé xe đỗ hoạt động</h3>
+                  <h3 className="text-lg font-bold text-slate-800">Không có lượt đỗ xe hoạt động</h3>
                   <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
-                    Hiện xe của bạn chưa vào bãi đỗ hoặc bạn chưa nhận vé xe điện tử. Hãy quét RFID hoặc tạo một vé giả lập bên dưới.
+                    Hiện bạn chưa có xe đỗ tại hầm hoặc chưa có phiên đỗ xe nào được kích hoạt. Sử dụng form giả lập phía dưới để bắt đầu phiên đỗ.
                   </p>
                 </div>
 
-                {/* Simulate Checkin generator */}
-                <div className="max-w-sm mx-auto pt-6 border-t border-slate-150">
-                  <form onSubmit={handleGenerateTicket} className="space-y-3.5 text-left">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Mô phỏng quét vé vào bãi (Check-in)</p>
-                    {ticketCreateMsg && (
-                      <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs p-2.5 rounded-xl text-center font-semibold">
-                        {ticketCreateMsg}
-                      </div>
-                    )}
+                {/* Simulate Check-in */}
+                <div className="max-w-sm mx-auto pt-6 border-t border-slate-150 text-left">
+                  <form onSubmit={handleSimulateCheckIn} className="space-y-3.5">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Giả lập xe vào bãi đỗ (Simulate Check-in)</p>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Biển số xe giả lập</label>
+                      <label className="block text-xs font-bold text-slate-450 uppercase mb-1">Nhập Biển Số Xe</label>
                       <input
                         type="text"
                         required
-                        placeholder="Ví dụ: 30A-123.45"
-                        value={ticketLicensePlate}
-                        onChange={(e) => setTicketLicensePlate(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none uppercase font-bold"
+                        placeholder="Ví dụ: 30A-999.88"
+                        value={simulateLicensePlate}
+                        onChange={(e) => setSimulateLicensePlate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-sm uppercase font-bold focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Loại phương tiện</label>
+                      <label className="block text-xs font-bold text-slate-450 uppercase mb-1">Chọn Vị Trí Ô Đỗ (Slot)</label>
                       <select
-                        value={ticketVehicleType}
-                        onChange={(e) => setTicketVehicleType(e.target.value as 'CAR' | 'BIKE')}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-sm text-slate-800 focus:outline-none font-bold"
+                        value={simulateSlotId}
+                        onChange={(e) => setSimulateSlotId(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none"
+                        required
                       >
-                        <option value="CAR">Ô Tô (Car)</option>
-                        <option value="BIKE">Xe Máy (Motorbike)</option>
+                        <option value="">-- Chọn Vị Trí --</option>
+                        {availableSlotsList.map((slot) => (
+                          <option key={slot.id} value={slot.id}>
+                            {slot.slotCode} ({slot.vehicleTypeName || `Loại #${slot.vehicleTypeId}`})
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <button
                       type="submit"
-                      className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-semibold transition cursor-pointer"
+                      disabled={checkInMutation.isPending}
+                      className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-sm transition"
                     >
-                      Bấm Quét RFID Vào Cổng (Check-in)
+                      {checkInMutation.isPending ? 'Đang gửi...' : 'Gửi Yêu Cầu Check-In'}
                     </button>
                   </form>
                 </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                {/* Visual Ticket Receipt Card */}
-                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-lg border-t-8 border-indigo-600">
+                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-lg border-t-8 border-indigo-655">
                   <div className="bg-slate-50/50 p-6 border-b border-dashed border-slate-200 text-center relative">
-                    {/* Circle side cutouts for ticket aesthetic */}
-                    <div className="absolute bottom-0 left-0 w-4 h-8 bg-slate-50 border-r border-slate-200 rounded-r-full transform translate-y-4"></div>
-                    <div className="absolute bottom-0 right-0 w-4 h-8 bg-slate-50 border-l border-slate-200 rounded-l-full transform translate-y-4"></div>
-                    
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Vé Xe Điện Tử</p>
-                    <h4 className="text-2xl font-extrabold text-indigo-600 tracking-tight mt-1">{myTicket.ticketCode}</h4>
-                    <p className="text-xs text-slate-400 mt-0.5">Hệ thống đỗ xe tự động SmartParking</p>
+                    <h4 className="text-2xl font-extrabold text-indigo-655 mt-1">{currentSession.ticketCode}</h4>
+                    <p className="text-xs text-slate-400 mt-0.5">Trạng thái: <span className="font-extrabold uppercase text-indigo-600">{currentSession.status}</span></p>
                   </div>
 
-                  <div className="p-6 space-y-4 text-sm">
-                    <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
+                  <div className="p-6 space-y-4 text-xs">
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
                       <span className="text-slate-400 font-medium">Biển số xe:</span>
-                      <span className="font-bold text-slate-800 text-base">{myTicket.licensePlate}</span>
+                      <span className="font-bold text-slate-800 text-sm">{currentSession.licensePlate || 'N/A'}</span>
                     </div>
-
-                    <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
-                      <span className="text-slate-400 font-medium">Loại xe:</span>
-                      <span className="font-semibold text-slate-800">{myTicket.vehicleType === 'CAR' ? 'Ô tô' : 'Xe máy'}</span>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400 font-medium">Phân loại xe:</span>
+                      <span className="font-semibold text-slate-805">{currentSession.vehicleTypeName || 'N/A'}</span>
                     </div>
-
-                    <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
                       <span className="text-slate-400 font-medium">Vị trí đỗ (Slot):</span>
-                      <span className="font-bold text-indigo-650 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-100">{myTicket.slotCode}</span>
+                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-155">{currentSession.slotCode || 'N/A'}</span>
                     </div>
-
-                    <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
-                      <span className="text-slate-400 font-medium">Giờ vào:</span>
-                      <span className="font-semibold text-slate-800">{new Date(myTicket.entryTime).toLocaleString('vi-VN')}</span>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400 font-medium">Khu đỗ:</span>
+                      <span className="font-semibold text-slate-700">{currentSession.zoneName || 'N/A'}</span>
                     </div>
-
-                    <div className="flex justify-between items-center py-1.5 border-b border-slate-50">
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400 font-medium">Giờ xe vào:</span>
+                      <span className="font-semibold text-slate-750">
+                        {currentSession.entryTime ? new Date(currentSession.entryTime).toLocaleString('vi-VN') : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
                       <span className="text-slate-400 font-medium">Thời gian đỗ:</span>
-                      <span className="font-bold text-slate-700 font-mono">{myTicket.status === 'PARKED' ? liveDurationStr : 'Đã thanh toán'}</span>
+                      <span className="font-bold text-slate-800 font-mono">{liveDurationStr}</span>
                     </div>
-
                     <div className="flex justify-between items-center pt-2">
-                      <span className="text-slate-400 font-bold">Phí tạm tính:</span>
-                      <span className="text-2xl font-extrabold text-indigo-600">{myTicket.status === 'PARKED' ? liveFee.toLocaleString('vi-VN') + 'đ' : '0đ'}</span>
+                      <span className="text-slate-400 font-bold">Phí tạm tính (ước tính):</span>
+                      <span className="text-xl font-extrabold text-indigo-650">{(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ</span>
                     </div>
 
-                    {/* Paid Stamp */}
-                    {myTicket.status === 'PAID' && (
-                      <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-2xl text-center font-bold text-sm flex items-center justify-center space-x-2">
-                        <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <span>ĐÃ THANH TOÁN (HỢP LỆ RA CỔNG)</span>
+                    {currentSession.status === 'PAYMENT_PENDING' || currentSession.status === 'COMPLETED' ? (
+                      <div className="bg-emerald-50 border border-emerald-250 text-emerald-805 p-3 rounded-2xl text-center font-bold text-xs">
+                        ĐÃ THANH TOÁN (BARIE RA ĐÃ SẴN SÀNG)
                       </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setPaymentMethod('QR');
+                          setShowPaymentModal(true);
+                        }}
+                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-sm transition"
+                      >
+                        Thực Hiện Thanh Toán Online
+                      </button>
                     )}
                   </div>
                 </div>
 
-                {/* Simulated QR Check-out trigger */}
-                <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-5 text-center">
-                  <h4 className="font-bold text-slate-800 text-base">QR / RFID Định Danh Của Bạn</h4>
-                  <p className="text-xs text-slate-400">Đưa mã QR này trước camera tại Barie cổng ra để quét nhận diện checkout tự động.</p>
+                {/* Identity QR Code */}
+                <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm text-center space-y-4">
+                  <h4 className="font-bold text-slate-800 text-sm">Mã QR Vé Định Danh Của Bạn</h4>
+                  <p className="text-xs text-slate-400">Đưa mã này trước camera tại Barrier cổng ra để hệ thống mở barie tự động.</p>
                   
-                  {/* Elegant QR Code Simulation */}
-                  <div className="bg-slate-50 border border-slate-200 p-4.5 rounded-2xl inline-block shadow-inner">
-                    <div className="w-40 h-40 bg-white border border-slate-250 rounded-xl flex items-center justify-center p-2 mx-auto relative group">
-                      {/* Simulating QR grid using SVG lines */}
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl inline-block">
+                    <div className="w-36 h-36 bg-white border border-slate-250 rounded-xl flex items-center justify-center p-2 mx-auto relative group">
                       <svg className="w-full h-full text-slate-800" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M2 2h6v6H2V2zm1.5 1.5v3h3v-3h-3zM2 16h6v6H2v-6zm1.5 1.5v3h3v-3h-3zM16 2h6v6h-6V2zm1.5 1.5v3h3v-3h-3zM12 2h2v2h-2V2zm0 4h2v2h-2V6zm2-2h2v2h-2V4zm-2 6h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm6-4h2v2h-2v-2zm0 4h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2zm-6 2h2v2h-2v-2zm6 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2z" />
                       </svg>
-                      {/* Overlay scanning effect */}
-                      {myTicket.status === 'PARKED' && (
-                        <div className="absolute inset-x-0 top-0 h-0.5 bg-indigo-500 animate-bounce"></div>
-                      )}
                     </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {myTicket.status === 'PARKED' ? (
-                      <button
-                        onClick={handleCheckoutPayment}
-                        className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition shadow-md shadow-indigo-200 cursor-pointer"
-                      >
-                        Thanh Toán Online Ra Bãi
-                      </button>
-                    ) : myTicket.status === 'PAID' ? (
-                      <div className="space-y-2">
-                        <button
-                          onClick={handleVehicleExit}
-                          className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition cursor-pointer"
-                        >
-                          Giả Lập Cho Xe Đi Qua Barie Cổng Ra
-                        </button>
-                        <p className="text-[11px] text-slate-400">Hóa đơn đã được ghi nhận. Bạn có 15 phút để di chuyển xe ra khỏi bãi đỗ.</p>
-                      </div>
-                    ) : (
-                      <div className="py-4 text-slate-400">
-                        <p className="font-semibold text-slate-650">Lượt đỗ đã kết thúc thành công!</p>
-                        <button
-                          onClick={() => {
-                            setMyTicket(null);
-                            localStorage.removeItem('sim_ticket');
-                          }}
-                          className="mt-3 py-1.5 px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-xs font-semibold text-slate-600 rounded-lg cursor-pointer"
-                        >
-                          Tạo Lượt Đỗ Mới (Simulation)
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -660,158 +502,120 @@ export default function DriverDashboard() {
         {/* Tab 3: Booking / Reservations */}
         {activeTab === 'booking' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Booking Form */}
             <div className="lg:col-span-1 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
               <h3 className="text-base font-bold text-slate-800 pb-3 border-b border-slate-100 flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full"></span>
+                <span className="w-2.5 h-2.5 bg-indigo-650 rounded-full"></span>
                 <span>Đặt Chỗ Trước (Booking)</span>
               </h3>
 
-              {bookingSuccess && (
-                <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs p-3.5 rounded-xl font-semibold">
-                  {bookingSuccess}
-                </div>
-              )}
-
-              {bookingError && (
-                <div className="bg-rose-50 border border-rose-250 text-rose-800 text-xs p-3.5 rounded-xl">
-                  {bookingError}
-                </div>
-              )}
-
-              <form onSubmit={handleBookingSubmit} className="space-y-4">
+              <form onSubmit={handleBookingSubmit} className="space-y-4 text-xs">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Biển số xe đỗ</label>
-                  <input
-                    type="text"
+                  <label className="block font-bold text-slate-500 mb-1.5">Chọn Xe Đăng Ký Gửi</label>
+                  <select
+                    value={selectedVehicleId}
+                    onChange={(e) => setSelectedVehicleId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-850 focus:outline-none font-bold"
                     required
-                    placeholder="Ví dụ: 30A-999.88"
-                    value={licensePlate}
-                    onChange={(e) => setLicensePlate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none uppercase font-bold text-sm tracking-wider"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Loại phương tiện</label>
-                  <select
-                    value={vehicleType}
-                    onChange={(e) => setVehicleType(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-850 text-sm focus:outline-none font-bold"
                   >
-                    <option value="CAR">Ô Tô (Car)</option>
-                    <option value="BIKE">Xe Máy (Motorbike)</option>
+                    <option value="">-- Chọn Xe --</option>
+                    {vehicles.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.plateNumber} ({v.brand || 'N/A'})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Khu vực muốn gửi</label>
+                  <label className="block font-bold text-slate-500 mb-1.5">Chọn Khu Vực Đỗ</label>
                   <select
-                    value={zoneId}
-                    onChange={(e) => setZoneId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-850 text-sm focus:outline-none font-bold"
+                    value={selectedZoneId}
+                    onChange={(e) => setSelectedZoneId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-855 focus:outline-none font-bold"
+                    required
                   >
-                    <option value="1">Khu A (Tầng hầm - Rộng rãi)</option>
-                    <option value="2">Khu B (Tầng lửng - Ô tô/Xe máy)</option>
-                    <option value="3">Khu C (Ngoài trời - Có mái che)</option>
+                    <option value="">-- Chọn Phân Khu --</option>
+                    {zones.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.zoneName} ({z.vehicleTypeName})
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Thời gian bắt đầu gửi</label>
+                  <label className="block font-bold text-slate-500 mb-1.5">Thời gian bắt đầu gửi</label>
                   <input
                     type="datetime-local"
                     required
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-805 text-sm focus:outline-none font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-805 focus:outline-none font-semibold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Thời gian kết thúc dự kiến</label>
+                  <label className="block font-bold text-slate-500 mb-1.5">Thời gian kết thúc dự kiến</label>
                   <input
                     type="datetime-local"
                     required
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-805 text-sm focus:outline-none font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-805 focus:outline-none font-semibold"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  disabled={bookingLoading}
-                  className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+                  disabled={bookingMutation.isPending}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
                 >
-                  {bookingLoading ? 'Đang gửi yêu cầu...' : 'Nhận xác nhận Booking'}
+                  {bookingMutation.isPending ? 'Đang xử lý...' : 'Xác Nhận Đăng Ký Đặt Trước'}
                 </button>
               </form>
             </div>
 
-            {/* Booking List */}
             <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
               <h3 className="text-base font-bold text-slate-800 pb-3 border-b border-slate-100 flex items-center justify-between">
-                <span className="flex items-center space-x-2">
-                  <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full"></span>
-                  <span>Danh Sách Lượt Đặt Chỗ Trước</span>
-                </span>
-                <span className="text-xs text-slate-400 font-semibold">{bookings.length} Booking</span>
+                <span>Danh Sách Lượt Đặt Chỗ Trước</span>
+                <span className="text-xs text-slate-400 font-semibold">{bookings.length} Lượt đặt</span>
               </h3>
 
-              {bookings.length === 0 ? (
-                <div className="text-center py-12 text-slate-400 text-sm">
-                  Bạn chưa đăng ký đặt vị trí đỗ xe trước nào.
-                </div>
-              ) : (
-                <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-1">
-                  {bookings.map((book) => (
-                    <div key={book.id} className="border border-slate-150 p-4 rounded-2xl hover:border-indigo-350 transition space-y-3 bg-slate-50/20">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="text-xs font-bold text-slate-400 uppercase">Mã Booking: #{book.id}</span>
-                          <h4 className="text-base font-extrabold text-slate-800 mt-0.5">{book.licensePlate}</h4>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                          book.status.includes('XÁC NHẬN') || book.status === 'APPROVED'
-                            ? 'bg-emerald-50 border-emerald-250 text-emerald-800'
-                            : 'bg-slate-100 border-slate-200 text-slate-500'
-                        }`}>
-                          {book.status}
-                        </span>
-                      </div>
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                {bookings.map((book) => (
+                  <div key={book.id} className="border border-slate-150 p-4 rounded-2xl hover:border-indigo-355 transition bg-slate-50/20 flex justify-between items-center text-xs">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Mã Đặt Chỗ: #{book.id}</span>
+                      <h4 className="text-sm font-extrabold text-slate-800 mt-0.5">{book.licensePlate || `Xe #${book.vehicleId}`}</h4>
+                      <p className="text-[11px] text-slate-555 mt-1 font-semibold">
+                        Thời gian: {book.startTime ? new Date(book.startTime).toLocaleString('vi-VN') : 'N/A'} → {book.endTime ? new Date(book.endTime).toLocaleString('vi-VN') : 'N/A'}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-0.5">Khu vực: {book.zoneName || `Zone #${book.zoneId}`}</p>
+                    </div>
 
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="text-right space-y-2">
+                      <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                        book.status === 'APPROVED' ? 'bg-emerald-50 border-emerald-250 text-emerald-805' : 'bg-slate-100 border-slate-200 text-slate-500'
+                      }`}>
+                        {book.status}
+                      </span>
+                      {book.status === 'PENDING' && (
                         <div>
-                          <p className="text-slate-400 font-medium">Loại xe</p>
-                          <p className="font-bold text-slate-700 mt-0.5">{book.vehicleType === 'CAR' ? 'Ô Tô' : 'Xe Máy'}</p>
-                        </div>
-                        <div>
-                          <p className="text-slate-400 font-medium">Khu vực gửi</p>
-                          <p className="font-bold text-slate-700 mt-0.5">{book.zone}</p>
-                        </div>
-                        <div className="col-span-2">
-                          <p className="text-slate-400 font-medium">Thời gian gửi</p>
-                          <p className="font-bold text-slate-700 mt-0.5">
-                            {new Date(book.startTime).toLocaleString('vi-VN')} → {new Date(book.endTime).toLocaleString('vi-VN')}
-                          </p>
-                        </div>
-                      </div>
-
-                      {book.status !== 'ĐÃ HỦY' && (
-                        <div className="pt-2 border-t border-slate-100 flex justify-end">
                           <button
-                            onClick={() => handleCancelBooking(book.id)}
-                            className="text-xs font-semibold text-rose-600 hover:text-rose-700 transition cursor-pointer"
+                            onClick={() => cancelBookingMutation.mutate(book.id)}
+                            className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
                           >
                             Hủy đặt chỗ
                           </button>
                         </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ))}
+                {bookings.length === 0 && (
+                  <div className="text-center py-12 text-slate-400">Bạn chưa đăng ký đặt chỗ nào.</div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -820,40 +624,32 @@ export default function DriverDashboard() {
         {activeTab === 'feedback' && (
           <div className="max-w-2xl mx-auto bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
             <div className="text-center space-y-1.5">
-              <h3 className="text-lg font-bold text-slate-800">Gửi Phản Hồi & Báo Cáo Sự Cố</h3>
-              <p className="text-sm text-slate-400 max-w-md mx-auto">
-                Gặp vấn đề tại bãi đỗ xe? Hãy gửi phản hồi để đội ngũ nhân viên trực kỹ thuật xử lý và phản hồi sớm nhất.
-              </p>
+              <h3 className="text-lg font-bold text-slate-800">Gửi Ý Kiến Phản Hồi</h3>
+              <p className="text-sm text-slate-400">Chúng tôi luôn lắng nghe ý kiến phản ánh để nâng cao chất lượng dịch vụ vận hành bãi đỗ xe.</p>
             </div>
 
-            {feedbackSuccess && (
-              <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs p-3.5 rounded-xl text-center font-semibold">
-                Gửi phản hồi thành công! Chúng tôi đã ghi nhận và sẽ phản hồi qua Email của bạn.
-              </div>
-            )}
-
-            <form onSubmit={handleFeedbackSubmit} className="space-y-4">
+            <form onSubmit={handleFeedbackSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Loại vấn đề cần phản hồi</label>
+                <label className="block font-bold text-slate-500 mb-2">Loại Phản Hồi</label>
                 <select
-                  value={feedbackType}
-                  onChange={(e) => setFeedbackType(e.target.value)}
+                  value={feedbackCategory}
+                  onChange={(e) => setFeedbackCategory(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-3 text-slate-850 text-sm focus:outline-none font-bold"
                 >
-                  <option value="LOST_TICKET">Mất vé giấy (Lost ticket)</option>
-                  <option value="INCORRECT_FEE">Sai phí gửi xe (Incorrect billing fee)</option>
-                  <option value="CAR_LOCATING">Khó tìm xe trong hầm (Difficulty finding car)</option>
-                  <option value="SLOT_OCCUPIED">Slot đỗ đăng ký bị chiếm (Slot occupied)</option>
-                  <option value="OTHER">Lỗi hệ thống hoặc vấn đề khác</option>
+                  <option value="LOST_TICKET">Báo Mất Vé Xe</option>
+                  <option value="INCORRECT_FEE">Khiếu nại sai phí đỗ</option>
+                  <option value="CAR_LOCATING">Khó tìm vị trí ô đỗ</option>
+                  <option value="SLOT_OCCUPIED">Vị trí ô đỗ bị chiếm</option>
+                  <option value="OTHER">Góp ý khác</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Chi tiết phản hồi</label>
+                <label className="block font-bold text-slate-500 mb-2">Chi tiết phản hồi</label>
                 <textarea
                   required
                   rows={4}
-                  placeholder="Mô tả cụ thể sự cố bạn gặp phải (ví dụ: Biển số xe, vị trí slot đỗ, mã vé, thời gian phát hiện...)"
+                  placeholder="Mô tả cụ thể vấn đề hoặc phản hồi của bạn..."
                   value={feedbackContent}
                   onChange={(e) => setFeedbackContent(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-450 focus:outline-none text-sm leading-relaxed"
@@ -862,178 +658,84 @@ export default function DriverDashboard() {
 
               <button
                 type="submit"
-                disabled={feedbackLoading}
-                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
+                disabled={submitFeedbackMutation.isPending}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm disabled:opacity-50 text-xs"
               >
-                {feedbackLoading ? 'Đang gửi phản hồi...' : 'Gửi phản hồi sự cố'}
+                {submitFeedbackMutation.isPending ? 'Đang gửi...' : 'Gửi Phản Hồi Ngay'}
               </button>
             </form>
           </div>
         )}
       </main>
 
-      {/* PAYMENT MODAL (Simulating Online Checkout) */}
-      {showPaymentModal && myTicket && (
+      {/* PAYMENT MODAL */}
+      {showPaymentModal && currentSession && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-250 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white border border-slate-250 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden">
             <div className="bg-slate-50/50 px-6 py-4.5 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-bold text-slate-850 text-base">Thanh Toán Vé Xe #{myTicket.ticketCode}</h3>
+              <h3 className="font-bold text-slate-850 text-base">Thanh Toán Hóa Đơn Lượt Đỗ #{currentSession.ticketCode}</h3>
               <button
-                onClick={() => { if (!paymentProcessing) setShowPaymentModal(false); }}
-                className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg"
+                onClick={() => setShowPaymentModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1.5 flex items-center justify-center text-sm font-bold border border-slate-200 rounded-lg w-7 h-7"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                Đóng
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {paymentSuccess ? (
-                <div className="text-center space-y-4 py-4 animate-in fade-in duration-300">
-                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-inner">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="text-lg font-bold text-slate-800">Thanh Toán Giao Dịch Thành Công</h4>
-                    <p className="text-xs text-slate-400 mt-1">Cổng Barie ra tự động đã mở khóa cho xe {myTicket.licensePlate}.</p>
-                  </div>
+            <div className="p-6 space-y-6 text-xs font-semibold">
+              <div className="p-4 bg-indigo-50/30 border border-indigo-100 rounded-2xl flex justify-between items-center">
+                <div>
+                  <p className="text-slate-400 font-bold uppercase tracking-wider">Tổng số tiền thanh toán</p>
+                  <p className="text-2xl font-extrabold text-indigo-650 mt-1">{(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ</p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-slate-400 font-bold uppercase tracking-wider">Phương thức thanh toán</label>
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={handleVehicleExit}
-                    className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition cursor-pointer"
+                    onClick={() => setPaymentMethod('QR')}
+                    className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center space-y-1.5 ${
+                      paymentMethod === 'QR' ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650' : 'border-slate-200 hover:bg-slate-50 text-slate-650'
+                    }`}
                   >
-                    Hoàn thành
+                    <span>VietQR Sandbox</span>
+                  </button>
+                  <button
+                    onClick={() => setPaymentMethod('WALLET')}
+                    className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center space-y-1.5 ${
+                      paymentMethod === 'WALLET' ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650' : 'border-slate-200 hover:bg-slate-50 text-slate-650'
+                    }`}
+                  >
+                    <span>Momo Sandbox</span>
                   </button>
                 </div>
-              ) : (
-                <>
-                  {/* Bill Summary */}
-                  <div className="p-4 bg-indigo-50/30 border border-indigo-100 rounded-2xl flex justify-between items-center">
-                    <div>
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Số tiền cần thanh toán</p>
-                      <p className="text-2xl font-extrabold text-indigo-650 mt-1">{liveFee.toLocaleString('vi-VN')}đ</p>
-                    </div>
-                    <span className="text-xs bg-indigo-100/50 text-indigo-850 px-2.5 py-1 rounded-xl font-bold border border-indigo-200">Vé lượt</span>
-                  </div>
+              </div>
 
-                  {/* Payment method selector */}
-                  <div className="space-y-2">
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Chọn phương thức thanh toán</label>
-                    <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-                      <button
-                        onClick={() => setPaymentMethod('QR')}
-                        className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center space-y-1.5 ${
-                          paymentMethod === 'QR'
-                            ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650'
-                            : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-                        }`}
-                      >
-                        <svg className="w-5 h-5 text-indigo-550" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                        </svg>
-                        <span>QR Payment</span>
-                      </button>
-
-                      <button
-                        onClick={() => setPaymentMethod('WALLET')}
-                        className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center space-y-1.5 ${
-                          paymentMethod === 'WALLET'
-                            ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650'
-                            : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-                        }`}
-                      >
-                        <svg className="w-5 h-5 text-pink-550" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                        </svg>
-                        <span>Ví Momo/ZaloPay</span>
-                      </button>
-
-                      <button
-                        onClick={() => setPaymentMethod('BANK')}
-                        className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center space-y-1.5 ${
-                          paymentMethod === 'BANK'
-                            ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650'
-                            : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-                        }`}
-                      >
-                        <svg className="w-5 h-5 text-emerald-550" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                        </svg>
-                        <span>Chuyển Khoản</span>
-                      </button>
-
-                      <button
-                        onClick={() => setPaymentMethod('CASH')}
-                        className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center justify-center space-y-1.5 ${
-                          paymentMethod === 'CASH'
-                            ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650'
-                            : 'border-slate-200 hover:bg-slate-50 text-slate-600'
-                        }`}
-                      >
-                        <svg className="w-5 h-5 text-amber-550" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                        <span>Tiền Mặt (Quầy)</span>
-                      </button>
+              <div className="pt-2 border-t border-slate-100">
+                {paymentMethod === 'QR' ? (
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-3.5">
+                    <p className="text-slate-400 font-bold uppercase">Quét mã VietQR Vietcombank để chuyển khoản</p>
+                    <div className="w-32 h-32 bg-white border border-slate-250 p-2 mx-auto rounded-lg flex items-center justify-center">
+                      <svg className="w-full h-full text-indigo-650" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h4v4H7V7zm6 0h4v4h-4V7zm-6 6h4v4H7v-4zm6 0h4v4h-4v-4z" />
+                      </svg>
                     </div>
                   </div>
-
-                  {/* Payment Simulator Display */}
-                  <div className="pt-2 border-t border-slate-100">
-                    {paymentMethod === 'QR' && (
-                      <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-3.5">
-                        <p className="text-[11px] text-slate-400 font-bold uppercase">Quét mã VietQR bên dưới để thanh toán</p>
-                        <div className="w-32 h-32 bg-white border border-slate-250 p-2 mx-auto rounded-lg flex items-center justify-center">
-                          {/* Visual mockup of bank qr */}
-                          <svg className="w-full h-full text-indigo-650" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h4v4H7V7zm6 0h4v4h-4V7zm-6 6h4v4H7v-4zm6 0h4v4h-4v-4z" />
-                          </svg>
-                        </div>
-                        <p className="text-[10px] text-slate-400">Vietcombank - CTCP SmartParking<br />Số TK: 10099887766</p>
-                      </div>
-                    )}
-
-                    {paymentMethod === 'WALLET' && (
-                      <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-2 text-xs">
-                        <p className="text-slate-400">Ấn nút thanh toán dưới để liên kết ứng dụng ví điện tử Momo / ZaloPay tự động</p>
-                        <p className="font-bold text-slate-700">Mã giao dịch: MOMO_{myTicket.ticketCode}</p>
-                      </div>
-                    )}
-
-                    {paymentMethod === 'BANK' && (
-                      <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl space-y-1.5 text-xs text-slate-600">
-                        <div className="flex justify-between"><span className="text-slate-400">Ngân hàng:</span><span className="font-bold text-slate-800">Vietcombank (VCB)</span></div>
-                        <div className="flex justify-between"><span className="text-slate-400">Số tài khoản:</span><span className="font-bold text-slate-800">10099887766</span></div>
-                        <div className="flex justify-between"><span className="text-slate-400">Chủ tài khoản:</span><span className="font-bold text-slate-850">CTCP PARKINGSMART</span></div>
-                        <div className="flex justify-between"><span className="text-slate-400">Nội dung CK:</span><span className="font-bold text-indigo-600 uppercase font-mono">{myTicket.ticketCode}</span></div>
-                      </div>
-                    )}
-
-                    {paymentMethod === 'CASH' && (
-                      <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-1.5 text-xs text-slate-600">
-                        <p className="text-slate-400">Bạn vui lòng đưa vé xe hoặc biển số xe cho thu ngân tại chốt cổng ra kiểm soát bãi đỗ để trả tiền mặt.</p>
-                      </div>
-                    )}
+                ) : (
+                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-2">
+                    <p className="text-slate-400">Cổng thanh toán Momo Sandbox đã liên kết tự động</p>
                   </div>
+                )}
+              </div>
 
-                  <button
-                    onClick={executePayment}
-                    disabled={paymentProcessing}
-                    className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold transition shadow-md shadow-indigo-100 flex items-center justify-center cursor-pointer disabled:opacity-50"
-                  >
-                    {paymentProcessing ? (
-                      <div className="flex items-center space-x-2">
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                        <span>Đang xử lý giao dịch...</span>
-                      </div>
-                    ) : (
-                      'Xác Nhận Đã Thanh Toán'
-                    )}
-                  </button>
-                </>
-              )}
+              <button
+                onClick={() => checkoutMutation.mutate(currentSession.sessionId)}
+                disabled={checkoutMutation.isPending}
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-md disabled:opacity-50 text-xs"
+              >
+                {checkoutMutation.isPending ? 'Đang thực hiện thanh toán...' : 'Xác Nhận Đã Thanh Toán Trọn Gói'}
+              </button>
             </div>
           </div>
         </div>

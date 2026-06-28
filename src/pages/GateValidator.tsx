@@ -7,6 +7,7 @@ export default function GateValidator() {
   const [validationResult, setValidationResult] = useState<any | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exiting, setExiting] = useState(false);
 
   const handleValidate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,8 +39,9 @@ export default function GateValidator() {
         return;
       }
 
-      const isCompleted = matchingSession.status === 'COMPLETED' || matchingSession.status === 'CHECKED_OUT';
+      const isCompleted = matchingSession.status === 'COMPLETED' || matchingSession.status === 'CHECKED_OUT' || matchingSession.status === 'PAYMENT_PENDING';
       setValidationResult({
+        id: matchingSession.id || matchingSession.sessionId,
         openBarrier: isCompleted,
         ticketCode: matchingSession.ticketCode,
         vehicleId: matchingSession.vehicleId,
@@ -59,6 +61,21 @@ export default function GateValidator() {
     }
   };
 
+  const handleConfirmExit = async () => {
+    if (!validationResult) return;
+    setExiting(true);
+    try {
+      await parkingService.staffCompleteExit(validationResult.id, 'GATE_OUT_01');
+      alert('Đã xác nhận xe rời bãi đỗ thành công. Barie đóng.');
+      setValidationResult(null);
+      setSearchQuery('');
+    } catch (err: any) {
+      alert('Lỗi khi mở barie cổng ra: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setExiting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased">
       <Header />
@@ -66,7 +83,7 @@ export default function GateValidator() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Xác Thực Mở Cổng Barie</h2>
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Xác Thực Mở Cổng Barie (Gate Control)</h2>
           <p className="text-slate-400 text-sm mt-0.5">Quét vé hoặc kiểm tra tình trạng thanh toán của xe để tự động mở cổng.</p>
         </div>
 
@@ -113,8 +130,8 @@ export default function GateValidator() {
               <p className="font-bold text-slate-700 mb-1">Quy định xuất bãi:</p>
               <ul className="list-disc pl-4 space-y-1">
                 <li>Xe ra phải khớp với biển số / mã vé lúc vào.</li>
-                <li>Lượt gửi xe phải ở trạng thái ĐÃ CHO RA (CHECKED_OUT) sau khi thanh toán phí tại quầy.</li>
-                <li>Cổng sẽ tự động mở nếu trạng thái hợp lệ.</li>
+                <li>Lượt gửi xe phải ở trạng thái ĐÃ THANH TOÁN.</li>
+                <li>Nhân viên trực cổng bấm xác nhận sau khi xe đi qua để hạ barie bảo vệ an toàn.</li>
               </ul>
             </div>
           </div>
@@ -139,7 +156,7 @@ export default function GateValidator() {
               <div 
                 className={`absolute w-64 h-3.5 border rounded transition-all duration-1005 origin-left z-10 ${
                   validationResult?.openBarrier 
-                    ? 'bg-emerald-500 border-emerald-400 -rotate-90 translate-x-16 -translate-y-8 shadow-sm' 
+                    ? 'bg-emerald-50 border-emerald-400 -rotate-90 translate-x-16 -translate-y-8 shadow-sm' 
                     : 'bg-rose-600 border-rose-500 translate-x-28 translate-y-1 shadow-sm'
                 }`}
                 style={{
@@ -159,7 +176,7 @@ export default function GateValidator() {
               <p className="text-base font-extrabold tracking-widest mt-6 z-20">
                 TRẠNG THÁI CỔNG:{' '}
                 <span className={validationResult?.openBarrier ? 'text-emerald-600' : 'text-rose-600'}>
-                  {validationResult?.openBarrier ? 'CỔNG MỞ' : 'CỔNG KHÓA'}
+                  {validationResult?.openBarrier ? 'CỔNG MỞ (BARIER UP)' : 'CỔNG KHÓA (BARIER DOWN)'}
                 </span>
               </p>
             </div>
@@ -196,23 +213,32 @@ export default function GateValidator() {
                   <div className="bg-slate-50 p-3 border border-slate-200 rounded-xl">
                     <span className="text-[10px] text-slate-400 block uppercase font-bold">Trạng thái lượt đỗ</span>
                     <span className="font-bold text-slate-800">
-                      {validationResult.status === 'CHECKED_OUT' ? 'Đã cho xe ra (CHECKED_OUT)' : validationResult.status}
+                      {validationResult.status}
                     </span>
                   </div>
                 </div>
 
                 {validationResult.openBarrier ? (
-                  <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl text-emerald-800 text-xs">
-                    <p className="font-bold">✓ CHO PHÉP XUẤT BÃI (BARIE TỰ ĐỘNG MỞ)</p>
-                    <p className="text-slate-500 mt-1">
-                      Lượt đỗ đã hoàn tất thanh toán. Xe được phép di chuyển ra ngoài tòa nhà.
-                    </p>
+                  <div className="bg-emerald-50 border border-emerald-200 p-3.5 rounded-xl text-emerald-800 text-xs space-y-3">
+                    <div>
+                      <p className="font-bold">✓ CHO PHÉP XUẤT BÃI (BARIE TỰ ĐỘNG MỞ)</p>
+                      <p className="text-slate-500 mt-1">
+                        Lượt đỗ đã hoàn tất thanh toán. Xe được phép di chuyển ra ngoài tòa nhà.
+                      </p>
+                    </div>
+                    <button
+                      onClick={handleConfirmExit}
+                      disabled={exiting}
+                      className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition"
+                    >
+                      {exiting ? 'Đang xác nhận...' : 'Xác Nhận Xe Đã Qua (Đóng Barrier)'}
+                    </button>
                   </div>
                 ) : (
                   <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-xl text-rose-700 text-xs">
                     <p className="font-bold">✗ TỪ CHỐI CHO XE QUA (YÊU CẦU KIỂM TRA LẠI)</p>
                     <p className="text-slate-500 mt-1">
-                      Lý do: Lượt đỗ chưa được thực hiện thanh toán và checkout tại quầy. Vui lòng quay lại quầy thu ngân thực hiện thanh toán.
+                      Lý do: Lượt đỗ chưa được thực hiện thanh toán. Vui lòng hướng dẫn tài xế thanh toán trực tuyến hoặc tại quầy.
                     </p>
                   </div>
                 )}

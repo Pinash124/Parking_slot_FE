@@ -1,17 +1,42 @@
 import api from './api';
 import type {
   ParkingSession,
-  DashboardOverviewResponse
+  DashboardOverviewResponse,
+  BuildingView,
+  BuildingRequest,
+  FloorView,
+  FloorRequest,
+  VehicleTypeView,
+  VehicleTypeRequest,
+  ZoneView,
+  ZoneRequest,
+  SlotView,
+  SlotRequest,
+  SlotStatusUpdateRequest,
+  PricingView,
+  PricingRequest,
+  FeedbackResponse,
+  IncidentRequest,
+  IncidentResponse,
+  ParkingSessionResponse,
+  SessionCheckInRequest,
+  SessionCheckoutRequest,
+  SystemOperationalStatusResponse,
+  BackupResponse,
+  RecoveryStatusResponse,
+  AuditLogResponse,
+  ReservationResponse,
+  PageResponse,
 } from '../types/parking';
 
 export const parkingService = {
-  // 1. Dashboard Overview
+  // ========== DASHBOARD ==========
   getOverviewReport: async (): Promise<DashboardOverviewResponse> => {
     const response = await api.get<DashboardOverviewResponse>('/api/dashboard/overview');
     return response.data;
   },
 
-  // 2. Parking Sessions
+  // ========== PARKING SESSIONS (legacy - used by old pages) ==========
   getAllSessions: async (): Promise<ParkingSession[]> => {
     const response = await api.get<ParkingSession[]>('/api/parking-sessions');
     return response.data;
@@ -35,5 +60,268 @@ export const parkingService = {
   checkOut: async (id: number, payload?: { lostTicket?: boolean; overtimeMinutes?: number }): Promise<ParkingSession> => {
     const response = await api.post<ParkingSession>(`/api/parking-sessions/${id}/checkout`, payload || {});
     return response.data;
-  }
+  },
+
+  // ========== STAFF PARKING SESSIONS (new endpoint) ==========
+  staffGetSessionById: async (id: number): Promise<ParkingSessionResponse> => {
+    const response = await api.get<ParkingSessionResponse>(`/api/staff/parking-sessions/${id}`);
+    return response.data;
+  },
+
+  staffCheckIn: async (entryGateCode: string, payload: SessionCheckInRequest): Promise<ParkingSessionResponse> => {
+    const response = await api.post<ParkingSessionResponse>(
+      `/api/staff/parking-sessions/check-in?entryGateCode=${encodeURIComponent(entryGateCode)}`,
+      payload
+    );
+    return response.data;
+  },
+
+  staffCheckout: async (id: number, payload?: SessionCheckoutRequest): Promise<ParkingSessionResponse> => {
+    const response = await api.post<ParkingSessionResponse>(
+      `/api/staff/parking-sessions/${id}/checkout`,
+      payload || {}
+    );
+    return response.data;
+  },
+
+  staffCompleteExit: async (id: number, exitGateCode: string): Promise<ParkingSessionResponse> => {
+    const response = await api.post<ParkingSessionResponse>(
+      `/api/staff/parking-sessions/${id}/complete-exit?exitGateCode=${encodeURIComponent(exitGateCode)}`
+    );
+    return response.data;
+  },
+
+  // ========== RESERVATIONS ==========
+  searchReservations: async (params?: {
+    userId?: number;
+    vehicleId?: number;
+    zoneId?: number;
+    status?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    size?: number;
+  }): Promise<PageResponse<ReservationResponse>> => {
+    const response = await api.get<PageResponse<ReservationResponse>>('/api/reservations', { params });
+    return response.data;
+  },
+
+  getReservationById: async (id: number): Promise<ReservationResponse> => {
+    const response = await api.get<ReservationResponse>(`/api/reservations/${id}`);
+    return response.data;
+  },
+
+  createReservation: async (payload: {
+    userId?: number;
+    vehicleId: number;
+    zoneId: number;
+    startTime: string;
+    endTime: string;
+  }): Promise<ReservationResponse> => {
+    const response = await api.post<ReservationResponse>('/api/reservations', payload);
+    return response.data;
+  },
+
+  approveReservation: async (id: number): Promise<ReservationResponse> => {
+    const response = await api.patch<ReservationResponse>(`/api/reservations/${id}/approve`);
+    return response.data;
+  },
+
+  cancelReservation: async (id: number): Promise<ReservationResponse> => {
+    const response = await api.patch<ReservationResponse>(`/api/reservations/${id}/cancel`);
+    return response.data;
+  },
+
+  // ========== MANAGER - BUILDINGS ==========
+  getBuildings: async (): Promise<BuildingView[]> => {
+    const response = await api.get<BuildingView[]>('/api/manager/buildings');
+    return response.data;
+  },
+
+  createBuilding: async (payload: BuildingRequest): Promise<BuildingView> => {
+    const response = await api.post<BuildingView>('/api/manager/buildings', payload);
+    return response.data;
+  },
+
+  updateBuilding: async (id: number, payload: BuildingRequest): Promise<BuildingView> => {
+    const response = await api.put<BuildingView>(`/api/manager/buildings/${id}`, payload);
+    return response.data;
+  },
+
+  deleteBuilding: async (id: number): Promise<void> => {
+    await api.delete(`/api/manager/buildings/${id}`);
+  },
+
+  // ========== MANAGER - FLOORS ==========
+  getFloors: async (buildingId?: number): Promise<FloorView[]> => {
+    const response = await api.get<FloorView[]>('/api/manager/floors', {
+      params: buildingId ? { buildingId } : undefined,
+    });
+    return response.data;
+  },
+
+  createFloor: async (payload: FloorRequest): Promise<FloorView> => {
+    const response = await api.post<FloorView>('/api/manager/floors', payload);
+    return response.data;
+  },
+
+  updateFloor: async (id: number, payload: FloorRequest): Promise<FloorView> => {
+    const response = await api.put<FloorView>(`/api/manager/floors/${id}`, payload);
+    return response.data;
+  },
+
+  deleteFloor: async (id: number): Promise<void> => {
+    await api.delete(`/api/manager/floors/${id}`);
+  },
+
+  // ========== MANAGER - ZONES ==========
+  getZones: async (floorId?: number): Promise<ZoneView[]> => {
+    const response = await api.get<ZoneView[]>('/api/manager/zones', {
+      params: floorId ? { floorId } : undefined,
+    });
+    return response.data;
+  },
+
+  createZone: async (payload: ZoneRequest): Promise<ZoneView> => {
+    const response = await api.post<ZoneView>('/api/manager/zones', payload);
+    return response.data;
+  },
+
+  updateZone: async (id: number, payload: ZoneRequest): Promise<ZoneView> => {
+    const response = await api.put<ZoneView>(`/api/manager/zones/${id}`, payload);
+    return response.data;
+  },
+
+  deleteZone: async (id: number): Promise<void> => {
+    await api.delete(`/api/manager/zones/${id}`);
+  },
+
+  // ========== MANAGER - SLOTS ==========
+  getSlots: async (zoneId?: number): Promise<SlotView[]> => {
+    const response = await api.get<SlotView[]>('/api/manager/slots', {
+      params: zoneId ? { zoneId } : undefined,
+    });
+    return response.data;
+  },
+
+  createSlot: async (payload: SlotRequest): Promise<SlotView> => {
+    const response = await api.post<SlotView>('/api/manager/slots', payload);
+    return response.data;
+  },
+
+  updateSlot: async (id: number, payload: SlotRequest): Promise<SlotView> => {
+    const response = await api.put<SlotView>(`/api/manager/slots/${id}`, payload);
+    return response.data;
+  },
+
+  updateSlotStatus: async (id: number, payload: SlotStatusUpdateRequest): Promise<SlotView> => {
+    const response = await api.put<SlotView>(`/api/manager/slots/${id}/status`, payload);
+    return response.data;
+  },
+
+  deleteSlot: async (id: number): Promise<void> => {
+    await api.delete(`/api/manager/slots/${id}`);
+  },
+
+  // ========== MANAGER - PRICING POLICIES ==========
+  getPricingPolicies: async (): Promise<PricingView[]> => {
+    const response = await api.get<PricingView[]>('/api/manager/pricing-policies');
+    return response.data;
+  },
+
+  createPricingPolicy: async (payload: PricingRequest): Promise<PricingView> => {
+    const response = await api.post<PricingView>('/api/manager/pricing-policies', payload);
+    return response.data;
+  },
+
+  updatePricingPolicy: async (id: number, payload: PricingRequest): Promise<PricingView> => {
+    const response = await api.put<PricingView>(`/api/manager/pricing-policies/${id}`, payload);
+    return response.data;
+  },
+
+  deletePricingPolicy: async (id: number): Promise<void> => {
+    await api.delete(`/api/manager/pricing-policies/${id}`);
+  },
+
+  // ========== MANAGER - VEHICLE TYPES ==========
+  getVehicleTypes: async (): Promise<VehicleTypeView[]> => {
+    const response = await api.get<VehicleTypeView[]>('/api/manager/vehicle-types');
+    return response.data;
+  },
+
+  createVehicleType: async (payload: VehicleTypeRequest): Promise<VehicleTypeView> => {
+    const response = await api.post<VehicleTypeView>('/api/manager/vehicle-types', payload);
+    return response.data;
+  },
+
+  updateVehicleType: async (id: number, payload: VehicleTypeRequest): Promise<VehicleTypeView> => {
+    const response = await api.put<VehicleTypeView>(`/api/manager/vehicle-types/${id}`, payload);
+    return response.data;
+  },
+
+  // ========== FEEDBACK ==========
+  submitFeedback: async (payload: { sessionId?: number; category?: string; rating?: number; content: string }): Promise<FeedbackResponse> => {
+    const response = await api.post<FeedbackResponse>('/api/feedback', payload);
+    return response.data;
+  },
+
+  getAllFeedbacks: async (): Promise<FeedbackResponse[]> => {
+    const response = await api.get<FeedbackResponse[]>('/api/feedback');
+    return response.data;
+  },
+
+  getMyFeedbacks: async (): Promise<FeedbackResponse[]> => {
+    const response = await api.get<FeedbackResponse[]>('/api/feedback/my');
+    return response.data;
+  },
+
+  getFeedbacksBySession: async (sessionId: number): Promise<FeedbackResponse[]> => {
+    const response = await api.get<FeedbackResponse[]>(`/api/feedback/session/${sessionId}`);
+    return response.data;
+  },
+
+  // ========== INCIDENTS ==========
+  getIncidents: async (status?: string): Promise<IncidentResponse[]> => {
+    const response = await api.get<IncidentResponse[]>('/api/staff/incidents', {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
+  createIncident: async (payload: IncidentRequest): Promise<IncidentResponse> => {
+    const response = await api.post<IncidentResponse>('/api/staff/incidents', payload);
+    return response.data;
+  },
+
+  resolveIncident: async (id: number): Promise<IncidentResponse> => {
+    const response = await api.patch<IncidentResponse>(`/api/staff/incidents/${id}/resolve`);
+    return response.data;
+  },
+
+  // ========== SYSTEM OPERATIONS ==========
+  getSystemOperations: async (): Promise<SystemOperationalStatusResponse> => {
+    const response = await api.get<SystemOperationalStatusResponse>('/api/system/operations');
+    return response.data;
+  },
+
+  getRecoveryStatus: async (): Promise<RecoveryStatusResponse> => {
+    const response = await api.get<RecoveryStatusResponse>('/api/system/recovery');
+    return response.data;
+  },
+
+  getLatestBackup: async (): Promise<BackupResponse> => {
+    const response = await api.get<BackupResponse>('/api/system/backups/latest');
+    return response.data;
+  },
+
+  createBackup: async (): Promise<BackupResponse> => {
+    const response = await api.post<BackupResponse>('/api/system/backups');
+    return response.data;
+  },
+
+  // ========== AUDIT LOGS ==========
+  getAuditLogs: async (): Promise<AuditLogResponse[]> => {
+    const response = await api.get<AuditLogResponse[]>('/api/audit-logs');
+    return response.data;
+  },
 };

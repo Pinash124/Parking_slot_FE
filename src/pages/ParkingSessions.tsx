@@ -4,10 +4,9 @@ import { parkingService } from '../services/parkingService';
 import Header from '../components/Header';
 
 export default function ParkingSessions() {
-
   // Check-in Form State
-  const [vehicleId, setVehicleId] = useState('1');
-  const [slotId, setSlotId] = useState('1');
+  const [licensePlate, setLicensePlate] = useState('');
+  const [slotId, setSlotId] = useState('');
   const [ticketCode, setTicketCode] = useState('');
   const [checkInMsg, setCheckInMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -17,21 +16,30 @@ export default function ParkingSessions() {
   const [checkoutMsg, setCheckoutMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Queries
-  const { data: activeSessions, refetch: refetchActiveSessions } = useQuery({
+  const { data: activeSessions = [], refetch: refetchActiveSessions } = useQuery({
     queryKey: ['activeSessionsList'],
     queryFn: () => parkingService.getSessionsByStatus('ACTIVE'),
     refetchInterval: 5000,
   });
 
+  const { data: slots = [] } = useQuery({
+    queryKey: ['slots'],
+    queryFn: () => parkingService.getSlots(),
+  });
+  const availableSlots = slots.filter((s) => s.status === 'AVAILABLE');
+
   // Check-in Mutation
   const checkInMutation = useMutation({
-    mutationFn: parkingService.checkIn,
+    mutationFn: (payload: { licensePlate: string; slotId: number; ticketCode?: string }) =>
+      parkingService.staffCheckIn('GATE_IN_01', payload),
     onSuccess: (res) => {
       setCheckInMsg({
         type: 'success',
         text: `Cho xe vào bãi thành công! Mã vé: ${res.ticketCode} (Vị trí đỗ: ${res.slotCode || `#${res.slotId}`}).`,
       });
       setTicketCode('');
+      setLicensePlate('');
+      setSlotId('');
       refetchActiveSessions();
     },
     onError: (err: any) => {
@@ -45,7 +53,7 @@ export default function ParkingSessions() {
   // Checkout Mutation
   const checkOutMutation = useMutation({
     mutationFn: ({ id, lostTicket, overtimeMinutes }: { id: number; lostTicket: boolean; overtimeMinutes: number }) =>
-      parkingService.checkOut(id, { lostTicket, overtimeMinutes }),
+      parkingService.staffCheckout(id, { lostTicket, overtimeMinutes }),
     onSuccess: (res) => {
       setCheckoutMsg({
         type: 'success',
@@ -64,8 +72,12 @@ export default function ParkingSessions() {
   const handleCheckIn = (e: React.FormEvent) => {
     e.preventDefault();
     setCheckInMsg(null);
+    if (!licensePlate || !slotId) {
+      alert('Vui lòng nhập biển số xe và chọn vị trí ô đỗ.');
+      return;
+    }
     checkInMutation.mutate({
-      vehicleId: parseInt(vehicleId, 10),
+      licensePlate: licensePlate.toUpperCase().trim(),
       slotId: parseInt(slotId, 10),
       ticketCode: ticketCode || undefined,
     });
@@ -96,7 +108,7 @@ export default function ParkingSessions() {
               {checkInMsg && (
                 <div className={`p-3.5 rounded-xl border text-xs ${
                   checkInMsg.type === 'success' 
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-805' 
                     : 'bg-rose-50 border-rose-200 text-rose-700'
                 }`}>
                   {checkInMsg.text}
@@ -105,24 +117,31 @@ export default function ParkingSessions() {
 
               <form onSubmit={handleCheckIn} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ID Phương tiện</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Biển số xe</label>
                   <input 
-                    type="number"
-                    value={vehicleId}
-                    onChange={(e) => setVehicleId(e.target.value)}
+                    type="text"
+                    value={licensePlate}
+                    onChange={(e) => setLicensePlate(e.target.value)}
                     required
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none text-sm"
+                    placeholder="Ví dụ: 29A-12345"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none text-sm uppercase font-bold"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">ID Vị trí đỗ</label>
-                  <input 
-                    type="number"
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Vị trí ô đỗ trống (AVAILABLE)</label>
+                  <select
                     value={slotId}
                     onChange={(e) => setSlotId(e.target.value)}
                     required
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none text-sm"
-                  />
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none text-sm font-semibold"
+                  >
+                    <option value="">-- Chọn ô đỗ trống --</option>
+                    {availableSlots.map((slot) => (
+                      <option key={slot.id} value={slot.id}>
+                        {slot.slotCode} ({slot.vehicleTypeName || `Loại #${slot.vehicleTypeId}`})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -183,14 +202,14 @@ export default function ParkingSessions() {
                   <h3 className="text-base font-bold text-slate-800">Xe đang hoạt động trong bãi</h3>
                 </div>
                 <span className="text-xs px-2.5 py-0.5 bg-slate-100 text-slate-600 rounded-full font-bold">
-                  {activeSessions ? activeSessions.length : 0} xe
+                  {activeSessions.length} xe
                 </span>
               </div>
 
               {checkoutMsg && (
                 <div className={`p-3.5 rounded-xl border text-xs ${
                   checkoutMsg.type === 'success' 
-                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-805' 
                     : 'bg-rose-50 border-rose-200 text-rose-700'
                 }`}>
                   {checkoutMsg.text}
@@ -198,7 +217,7 @@ export default function ParkingSessions() {
               )}
 
               <div className="overflow-x-auto">
-                {!activeSessions || activeSessions.length === 0 ? (
+                {activeSessions.length === 0 ? (
                   <div className="text-center py-12 text-slate-400 text-sm">
                     Không có lượt xe đang hoạt động trong bãi đỗ.
                   </div>
@@ -217,8 +236,8 @@ export default function ParkingSessions() {
                       {activeSessions.map((session) => (
                         <tr key={session.id || session.sessionId} className="hover:bg-slate-50/50">
                           <td className="py-3 font-bold text-slate-800">{session.ticketCode}</td>
-                          <td className="py-3 text-slate-600">{session.licensePlate || `Xe #${session.vehicleId}`}</td>
-                          <td className="py-3 text-slate-600">{session.slotCode || `Slot #${session.slotId}`}</td>
+                          <td className="py-3 text-slate-650 font-bold">{session.licensePlate || `Xe #${session.vehicleId}`}</td>
+                          <td className="py-3 text-slate-600 font-semibold">{session.slotCode || `Slot #${session.slotId}`}</td>
                           <td className="py-3 text-slate-400">
                             {session.entryTime ? new Date(session.entryTime).toLocaleString('vi-VN') : '-'}
                           </td>
