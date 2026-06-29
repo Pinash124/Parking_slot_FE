@@ -101,13 +101,35 @@ export default function DriverDashboard() {
   });
 
   const checkoutMutation = useMutation({
-    mutationFn: (id: number) =>
-      parkingService.staffCheckout(id, { lostTicket: false }),
+    mutationFn: async ({ sessionId, amount }: { sessionId: number; amount: number }) => {
+      if (paymentMethod === 'VNPAY') {
+        const res = await parkingService.createVnpayPayment({
+          sessionId,
+          amount,
+          returnUrl: window.location.origin + '/driver-dashboard',
+          orderInfo: `Thanh toan ve xe cho phien do #${sessionId}`
+        });
+        if (res.paymentUrl) {
+          window.open(res.paymentUrl, '_blank');
+          alert('Hệ thống đang mở cổng thanh toán VNPay. Vui lòng thanh toán ở cửa sổ mới.');
+        } else {
+          alert('Không thể tạo liên kết thanh toán VNPay.');
+        }
+        return res;
+      } else {
+        const res = await parkingService.createCashPayment({
+          sessionId,
+          amount,
+          orderInfo: `Yeu cau thanh toan tien mat cho phien do #${sessionId}`
+        });
+        alert('Yêu cầu thanh toán tiền mặt đã được gửi. Vui lòng thanh toán trực tiếp cho nhân viên tại quầy ra.');
+        return res;
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentSession'] });
       queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
       queryClient.invalidateQueries({ queryKey: ['slots'] });
-      alert('Thanh toán thành công! Trạng thái Barie đã mở.');
       setShowPaymentModal(false);
     },
     onError: (err: any) => alert('Lỗi thanh toán: ' + (err.response?.data?.message || err.message)),
@@ -134,7 +156,7 @@ export default function DriverDashboard() {
 
   // --- PAYMENT MODAL ---
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'QR' | 'WALLET' | 'BANK' | 'CASH'>('QR');
+  const [paymentMethod, setPaymentMethod] = useState<'VNPAY' | 'CASH'>('VNPAY');
 
   // --- FEEDBACK ---
   const [feedbackCategory, setFeedbackCategory] = useState('OTHER');
@@ -470,7 +492,7 @@ export default function DriverDashboard() {
                     ) : (
                       <button
                         onClick={() => {
-                          setPaymentMethod('QR');
+                          setPaymentMethod('VNPAY');
                           setShowPaymentModal(true);
                         }}
                         className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-sm transition"
@@ -694,47 +716,44 @@ export default function DriverDashboard() {
                 <label className="block text-slate-400 font-bold uppercase tracking-wider">Phương thức thanh toán</label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => setPaymentMethod('QR')}
+                    onClick={() => setPaymentMethod('VNPAY')}
                     className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center space-y-1.5 ${
-                      paymentMethod === 'QR' ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650' : 'border-slate-200 hover:bg-slate-50 text-slate-650'
+                      paymentMethod === 'VNPAY' ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650' : 'border-slate-200 hover:bg-slate-50 text-slate-650'
                     }`}
                   >
-                    <span>VietQR Sandbox</span>
+                    <span>Thanh toán online (VNPay)</span>
                   </button>
                   <button
-                    onClick={() => setPaymentMethod('WALLET')}
+                    onClick={() => setPaymentMethod('CASH')}
                     className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center space-y-1.5 ${
-                      paymentMethod === 'WALLET' ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650' : 'border-slate-200 hover:bg-slate-50 text-slate-650'
+                      paymentMethod === 'CASH' ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650' : 'border-slate-200 hover:bg-slate-50 text-slate-650'
                     }`}
                   >
-                    <span>Momo Sandbox</span>
+                    <span>Tiền mặt (tại quầy)</span>
                   </button>
                 </div>
               </div>
 
               <div className="pt-2 border-t border-slate-100">
-                {paymentMethod === 'QR' ? (
+                {paymentMethod === 'VNPAY' ? (
                   <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-3.5">
-                    <p className="text-slate-400 font-bold uppercase">Quét mã VietQR Vietcombank để chuyển khoản</p>
-                    <div className="w-32 h-32 bg-white border border-slate-250 p-2 mx-auto rounded-lg flex items-center justify-center">
-                      <svg className="w-full h-full text-indigo-650" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M3 3h18v18H3V3zm2 2v14h14V5H5zm2 2h4v4H7V7zm6 0h4v4h-4V7zm-6 6h4v4H7v-4zm6 0h4v4h-4v-4z" />
-                      </svg>
-                    </div>
+                    <p className="text-slate-400 font-bold uppercase">Cổng thanh toán VNPay Sandbox</p>
+                    <p className="text-slate-500">Sau khi xác nhận, hệ thống sẽ mở cổng thanh toán VNPay để bạn thực hiện thanh toán online qua thẻ ngân hàng hoặc ứng dụng Mobile Banking.</p>
                   </div>
                 ) : (
                   <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-2">
-                    <p className="text-slate-400">Cổng thanh toán Momo Sandbox đã liên kết tự động</p>
+                    <p className="text-slate-400 font-bold uppercase">Thanh toán trực tiếp tại cổng ra</p>
+                    <p className="text-slate-550">Bạn vui lòng di chuyển xe đến chốt cổng ra, nhân viên trực cổng sẽ thực hiện thu tiền mặt và hoàn tất phiên đỗ của bạn.</p>
                   </div>
                 )}
               </div>
 
               <button
-                onClick={() => checkoutMutation.mutate(currentSession.sessionId)}
+                onClick={() => checkoutMutation.mutate({ sessionId: currentSession.sessionId, amount: currentSession.estimatedFee || 0 })}
                 disabled={checkoutMutation.isPending}
                 className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-md disabled:opacity-50 text-xs"
               >
-                {checkoutMutation.isPending ? 'Đang thực hiện thanh toán...' : 'Xác Nhận Đã Thanh Toán Trọn Gói'}
+                {checkoutMutation.isPending ? 'Đang tạo phiên giao dịch...' : 'Xác Nhận Phương Thức & Tiến Hành'}
               </button>
             </div>
           </div>

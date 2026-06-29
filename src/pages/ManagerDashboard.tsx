@@ -3,14 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import { parkingService } from '../services/parkingService';
 import type {
-  BuildingRequest,
-  FloorRequest,
   ZoneRequest,
   SlotRequest,
-  SlotStatusUpdateRequest,
   PricingRequest,
   VehicleTypeRequest,
-  IncidentRequest,
 } from '../types/parking';
 
 export default function ManagerDashboard() {
@@ -25,10 +21,6 @@ export default function ManagerDashboard() {
   });
 
   // --- API QUERIES ---
-  const { data: buildings = [] } = useQuery({
-    queryKey: ['buildings'],
-    queryFn: () => parkingService.getBuildings(),
-  });
 
   const { data: floors = [] } = useQuery({
     queryKey: ['floors'],

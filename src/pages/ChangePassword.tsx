@@ -22,8 +22,25 @@ export default function ChangePassword() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setError('Mật khẩu mới phải chứa ít nhất 8 ký tự.');
+    const hasUppercase = /[A-Z]/.test(newPassword);
+    const hasLowercase = /[a-z]/.test(newPassword);
+    const hasDigit = /[0-9]/.test(newPassword);
+    const hasSpecial = /[^A-Za-z0-9]/.test(newPassword);
+
+    if (newPassword.length < 8 || newPassword.length > 128) {
+      setError('Mật khẩu mới phải chứa từ 8 đến 128 ký tự.');
+      return;
+    }
+    if (!hasUppercase) {
+      setError('Mật khẩu bắt buộc phải có ít nhất 1 chữ cái viết hoa.');
+      return;
+    }
+    if (!hasSpecial) {
+      setError('Mật khẩu bắt buộc phải có ít nhất 1 kí tự đặc biệt.');
+      return;
+    }
+    if (!hasDigit || !(hasUppercase || hasLowercase)) {
+      setError('Mật khẩu phải có cả số và chữ.');
       return;
     }
 

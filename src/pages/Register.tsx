@@ -21,8 +21,25 @@ export default function Register() {
       return;
     }
 
-    if (password.length < 8) {
-      setError('Mật khẩu đăng ký phải chứa ít nhất 8 ký tự.');
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasDigit = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
+
+    if (password.length < 8 || password.length > 128) {
+      setError('Mật khẩu đăng ký phải chứa từ 8 đến 128 ký tự.');
+      return;
+    }
+    if (!hasUppercase) {
+      setError('Mật khẩu bắt buộc phải có ít nhất 1 chữ cái viết hoa.');
+      return;
+    }
+    if (!hasSpecial) {
+      setError('Mật khẩu bắt buộc phải có ít nhất 1 kí tự đặc biệt.');
+      return;
+    }
+    if (!hasDigit || !(hasUppercase || hasLowercase)) {
+      setError('Mật khẩu phải có cả số và chữ.');
       return;
     }
 

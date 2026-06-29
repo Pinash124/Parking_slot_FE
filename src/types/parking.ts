@@ -470,3 +470,34 @@ export interface SessionCheckoutRequest {
   lostTicket?: boolean;
   overtimeMinutes?: number;
 }
+
+// ======== PAYMENT GATEWAY DTOs ========
+
+export interface PaymentGatewayRequest {
+  sessionId: number;
+  amount: number;
+  returnUrl?: string;
+  orderInfo?: string;
+}
+
+export interface PaymentResponse {
+  id: number;
+  sessionId: number;
+  amount: number;
+  paymentMethod: string;
+  paymentTime: string | null;
+  status: string;
+}
+
+export interface PaymentGatewayResponse {
+  gateway: string;
+  paymentId: number;
+  referenceCode: string;
+  status: string;
+  paymentUrl: string | null;
+  qrContent: string | null;
+  message: string | null;
+  payment: PaymentResponse | null;
+  exitDeadline: string | null;
+}
+

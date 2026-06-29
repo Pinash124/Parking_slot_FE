@@ -27,6 +27,8 @@ import type {
   AuditLogResponse,
   ReservationResponse,
   PageResponse,
+  PaymentGatewayRequest,
+  PaymentGatewayResponse,
 } from '../types/parking';
 
 export const parkingService = {
@@ -88,6 +90,17 @@ export const parkingService = {
     const response = await api.post<ParkingSessionResponse>(
       `/api/staff/parking-sessions/${id}/complete-exit?exitGateCode=${encodeURIComponent(exitGateCode)}`
     );
+    return response.data;
+  },
+
+  // ========== PAYMENT GATEWAYS ==========
+  createVnpayPayment: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
+    const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/vnpay', payload);
+    return response.data;
+  },
+
+  createCashPayment: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
+    const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/cash', payload);
     return response.data;
   },
 
