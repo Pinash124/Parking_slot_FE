@@ -14,6 +14,8 @@ import MyReservations from './pages/MyReservations';
 import PaymentReturn from './pages/PaymentReturn';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminPolicies from './pages/AdminPolicies';
+import AdminUsers from './pages/AdminUsers';
 import ParkingSessions from './pages/ParkingSessions';
 import StaffCheckIn from './pages/StaffCheckIn';
 import StaffCheckOut from './pages/StaffCheckOut';
@@ -131,6 +133,8 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<AdminOrManagerRoute />} />
                   <Route path="/dashboard" element={<AdminDashboard />} />
+                  <Route path="/policies" element={<AdminPolicies />} />
+                  <Route path="/users" element={<AdminUsers />} />
                   <Route path="/logs" element={<ParkingLogs />} />
                   <Route path="/sessions" element={<ParkingSessions />} />
                   <Route path="/change-password" element={<ChangePassword />} />

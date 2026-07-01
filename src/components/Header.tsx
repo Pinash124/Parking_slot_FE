@@ -37,10 +37,18 @@ export default function Header() {
         ];
       case 'ADMIN':
       case 'ADMINISTRATOR':
-        return [{ label: 'Tổng quan', path: '/admin' }];
+        return [
+          { label: 'Tổng quan', path: '/admin' },
+          { label: 'Cấu hình bãi', path: '/admin/dashboard' },
+          { label: 'Biểu phí', path: '/admin/policies' },
+          { label: 'Người dùng', path: '/admin/users' },
+        ];
       case 'MANAGER':
         return [
           { label: 'Tổng quan', path: '/admin' },
+          { label: 'Cấu hình bãi', path: '/admin/dashboard' },
+          { label: 'Biểu phí', path: '/admin/policies' },
+          { label: 'Người dùng', path: '/admin/users' },
           { label: 'Lịch sử lượt đỗ', path: '/admin/logs' },
         ];
       case 'STAFF':
