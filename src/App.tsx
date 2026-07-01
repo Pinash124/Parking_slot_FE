@@ -130,6 +130,7 @@ export default function App() {
               <ProtectedRoute allowedRoles={['MANAGER', 'ADMIN', 'ADMINISTRATOR']}>
                 <Routes>
                   <Route path="/" element={<AdminOrManagerRoute />} />
+                  <Route path="/dashboard" element={<AdminDashboard />} />
                   <Route path="/logs" element={<ParkingLogs />} />
                   <Route path="/sessions" element={<ParkingSessions />} />
                   <Route path="/change-password" element={<ChangePassword />} />
