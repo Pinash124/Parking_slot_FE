@@ -6,6 +6,7 @@ import { authService } from './services/authService';
 // Pages
 import Login from './pages/Login';
 import Register from './pages/Register';
+import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import DriverDashboard from './pages/DriverDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
@@ -25,32 +26,50 @@ const queryClient = new QueryClient({
   },
 });
 
-// Guard wrapper to protect pages from unauthenticated access
+// Guard wrapper to protect pages by user role
 interface ProtectedRouteProps {
+  allowedRoles: string[];
   children: React.ReactNode;
 }
 
-function ProtectedRoute({ children }: ProtectedRouteProps) {
+function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) {
   if (!authService.isAuthenticated()) {
     // Session token not found, redirecting to login page
     return <Navigate to="/login" replace />;
   }
+
+  const currentUser = authService.getCurrentUser();
+  const role = currentUser?.role?.toUpperCase() || '';
+
+  // Standardize roles check
+  const mappedRole = role === 'USER' ? 'CUSTOMER' : (role === 'ADMINISTRATOR' ? 'ADMIN' : (role === 'OPERATOR' ? 'STAFF' : role));
+
+  const hasAccess = allowedRoles.some(
+    (allowedRole) => {
+      const standardAllowed = allowedRole.toUpperCase();
+      return (
+        mappedRole === standardAllowed || 
+        role === standardAllowed
+      );
+    }
+  );
+
+  if (!hasAccess) {
+    // Unauthorized role, redirect back to landing page
+    return <Navigate to="/" replace />;
+  }
+
   return <>{children}</>;
 }
 
-function DashboardRoute() {
+// Router helper to decide between Admin or Manager dashboards
+function AdminOrManagerRoute() {
   const currentUser = authService.getCurrentUser();
-  const role = currentUser?.role?.toUpperCase();
-  if (role === 'CUSTOMER' || role === 'USER') {
-    return <DriverDashboard />;
-  }
+  const role = currentUser?.role?.toUpperCase() || '';
   if (role === 'MANAGER') {
     return <ManagerDashboard />;
   }
-  if (role === 'ADMIN' || role === 'ADMINISTRATOR') {
-    return <AdminDashboard />;
-  }
-  return <Dashboard />;
+  return <AdminDashboard />;
 }
 
 export default function App() {
@@ -58,53 +77,59 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Public Auth Routes */}
+          {/* Guest routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 
-          {/* Protected Parking System Operations */}
-          <Route 
-            path="/" 
+          {/* Protected customer portal: /customer/* */}
+          <Route
+            path="/customer/*"
             element={
-              <ProtectedRoute>
-                <DashboardRoute />
+              <ProtectedRoute allowedRoles={['CUSTOMER', 'USER']}>
+                <Routes>
+                  <Route path="/" element={<DriverDashboard />} />
+                  <Route path="/change-password" element={<ChangePassword />} />
+                  <Route path="*" element={<Navigate to="/customer" replace />} />
+                </Routes>
               </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/change-password" 
-            element={
-              <ProtectedRoute>
-                <ChangePassword />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/sessions" 
-            element={
-              <ProtectedRoute>
-                <ParkingSessions />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/gate" 
-            element={
-              <ProtectedRoute>
-                <GateValidator />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/logs" 
-            element={
-              <ProtectedRoute>
-                <ParkingLogs />
-              </ProtectedRoute>
-            } 
+            }
           />
 
-          {/* Catch all fallback redirects to dashboard */}
+          {/* Protected staff portal: /staff/* */}
+          <Route
+            path="/staff/*"
+            element={
+              <ProtectedRoute allowedRoles={['STAFF', 'OPERATOR']}>
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/sessions" element={<ParkingSessions />} />
+                  <Route path="/gate" element={<GateValidator />} />
+                  <Route path="/logs" element={<ParkingLogs />} />
+                  <Route path="/change-password" element={<ChangePassword />} />
+                  <Route path="*" element={<Navigate to="/staff" replace />} />
+                </Routes>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protected admin portal: /admin/* */}
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute allowedRoles={['MANAGER', 'ADMIN', 'ADMINISTRATOR']}>
+                <Routes>
+                  <Route path="/" element={<AdminOrManagerRoute />} />
+                  <Route path="/logs" element={<ParkingLogs />} />
+                  <Route path="/sessions" element={<ParkingSessions />} />
+                  <Route path="/change-password" element={<ChangePassword />} />
+                  <Route path="*" element={<Navigate to="/admin" replace />} />
+                </Routes>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Catch all fallback redirects to landing page */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

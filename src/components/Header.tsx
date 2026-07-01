@@ -19,8 +19,8 @@ export default function Header() {
   };
 
   const isActive = (path: string) => {
-    if (path === '/') {
-      return location.pathname === '/';
+    if (path === '/customer' || path === '/staff' || path === '/admin') {
+      return location.pathname === path || location.pathname === `${path}/` || location.pathname === `${path}/dashboard`;
     }
     return location.pathname.startsWith(path);
   };
@@ -30,25 +30,34 @@ export default function Header() {
     switch (role) {
       case 'CUSTOMER':
       case 'USER':
-        return [{ label: 'Tổng quan', path: '/' }];
+        return [{ label: 'Tổng quan', path: '/customer' }];
       case 'ADMIN':
       case 'ADMINISTRATOR':
-        return [{ label: 'Tổng quan', path: '/' }];
+        return [{ label: 'Tổng quan', path: '/admin' }];
       case 'MANAGER':
         return [
-          { label: 'Tổng quan', path: '/' },
-          { label: 'Lịch sử lượt đỗ', path: '/logs' },
+          { label: 'Tổng quan', path: '/admin' },
+          { label: 'Lịch sử lượt đỗ', path: '/admin/logs' },
         ];
       case 'STAFF':
       case 'OPERATOR':
       default:
         return [
-          { label: 'Tổng quan', path: '/' },
-          { label: 'Cho xe ra/vào', path: '/sessions' },
-          { label: 'Cổng Barie', path: '/gate' },
-          { label: 'Lịch sử lượt đỗ', path: '/logs' },
+          { label: 'Tổng quan', path: '/staff' },
+          { label: 'Cho xe ra/vào', path: '/staff/sessions' },
+          { label: 'Cổng Barie', path: '/staff/gate' },
+          { label: 'Lịch sử lượt đỗ', path: '/staff/logs' },
         ];
     }
+  };
+
+  const getChangePasswordPath = () => {
+    if (!currentUser) return '/login';
+    const r = currentUser.role.toUpperCase();
+    if (r === 'CUSTOMER' || r === 'USER') return '/customer/change-password';
+    if (r === 'STAFF' || r === 'OPERATOR') return '/staff/change-password';
+    if (r === 'MANAGER' || r === 'ADMIN' || r === 'ADMINISTRATOR') return '/admin/change-password';
+    return '/';
   };
   const navItems = getNavItems();
 
@@ -139,10 +148,10 @@ export default function Header() {
                     </div>
                     
                     <Link
-                      to="/change-password"
+                      to={getChangePasswordPath()}
                       onClick={() => setUserDropdownOpen(false)}
                       className={`flex items-center px-4 py-2.5 text-sm font-semibold transition-colors ${
-                        isActive('/change-password')
+                        isActive(getChangePasswordPath())
                           ? 'bg-indigo-50 text-indigo-650'
                           : 'text-slate-650 hover:bg-slate-50 hover:text-slate-800'
                       }`}
@@ -225,10 +234,10 @@ export default function Header() {
 
           <div className="border-t border-slate-100 pt-2 space-y-1">
             <Link
-              to="/change-password"
+              to={getChangePasswordPath()}
               onClick={() => setMobileMenuOpen(false)}
               className={`flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold transition ${
-                isActive('/change-password')
+                isActive(getChangePasswordPath())
                   ? 'bg-indigo-50 text-indigo-650'
                   : 'text-slate-650 hover:bg-slate-50 hover:text-slate-800'
               }`}

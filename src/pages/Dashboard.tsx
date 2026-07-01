@@ -129,7 +129,7 @@ export default function Dashboard() {
               <h3 className="text-base font-bold text-slate-800 mb-4">Chức năng quản lý bãi xe</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Link 
-                  to="/sessions" 
+                  to="/staff/sessions" 
                   className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-indigo-50/20 transition group"
                 >
                   <span className="text-indigo-600 font-bold text-sm block">Cho xe ra / Cho xe vào &rarr;</span>
@@ -137,7 +137,7 @@ export default function Dashboard() {
                 </Link>
 
                 <Link 
-                  to="/gate" 
+                  to="/staff/gate" 
                   className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-indigo-50/20 transition group"
                 >
                   <span className="text-purple-600 font-bold text-sm block">Kiểm soát cổng Barie &rarr;</span>
@@ -145,7 +145,7 @@ export default function Dashboard() {
                 </Link>
 
                 <Link 
-                  to="/logs" 
+                  to="/staff/logs" 
                   className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-indigo-50/20 transition group sm:col-span-2"
                 >
                   <span className="text-emerald-600 font-bold text-sm block">Lịch sử lượt đỗ xe & Doanh thu &rarr;</span>
@@ -212,7 +212,7 @@ export default function Dashboard() {
               </div>
             )}
             
-            <Link to="/sessions" className="text-indigo-600 hover:underline text-xs font-semibold text-center mt-4 pt-4 border-t border-slate-100 block">
+            <Link to="/staff/sessions" className="text-indigo-600 hover:underline text-xs font-semibold text-center mt-4 pt-4 border-t border-slate-100 block">
               Xem quản lý lượt đỗ &rarr;
             </Link>
           </div>

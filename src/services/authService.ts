@@ -39,7 +39,7 @@ export const authService = {
     const data = response.data;
     
     // Lưu thông tin người dùng và token vào localStorage
-    localStorage.setItem('token', data.accessToken);
+    localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('username', data.fullName);
     localStorage.setItem('email', data.email);
     localStorage.setItem('role', data.role);
@@ -71,7 +71,7 @@ export const authService = {
    * Xóa thông tin phiên làm việc cục bộ.
    */
   clearSession: () => {
-    localStorage.removeItem('token');
+    localStorage.removeItem('accessToken');
     localStorage.removeItem('username');
     localStorage.removeItem('email');
     localStorage.removeItem('role');
@@ -81,7 +81,7 @@ export const authService = {
    * Kiểm tra xem người dùng đã đăng nhập chưa.
    */
   isAuthenticated: (): boolean => {
-    return !!localStorage.getItem('token');
+    return !!localStorage.getItem('accessToken');
   },
 
   /**
