@@ -7,6 +7,7 @@ import type {
   CurrentParkingSessionResponse,
   ParkingSessionResponse,
   PageResponse,
+  VehicleTypeView,
 } from '../types/parking';
 
 export const userPortalService = {
@@ -28,6 +29,26 @@ export const userPortalService = {
 
   deleteVehicle: async (id: number): Promise<void> => {
     await api.delete(`/api/user/vehicles/${id}`);
+  },
+
+  // ========== USER PORTAL VEHICLES (NEW) ==========
+  getUserPortalVehicles: async (): Promise<VehicleView[]> => {
+    const response = await api.get<VehicleView[]>('/api/user-portal/vehicles');
+    return response.data;
+  },
+
+  createUserPortalVehicle: async (payload: VehicleRequest): Promise<VehicleView> => {
+    const response = await api.post<VehicleView>('/api/user-portal/vehicles', payload);
+    return response.data;
+  },
+
+  deleteUserPortalVehicle: async (id: number): Promise<void> => {
+    await api.delete(`/api/user-portal/vehicles/${id}`);
+  },
+
+  getVehicleTypes: async (): Promise<VehicleTypeView[]> => {
+    const response = await api.get<VehicleTypeView[]>('/api/management/vehicle-types');
+    return response.data;
   },
 
   // ========== RESERVATIONS ==========
