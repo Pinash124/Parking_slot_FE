@@ -16,6 +16,7 @@ import ManagerDashboard from './pages/ManagerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import ParkingSessions from './pages/ParkingSessions';
 import StaffCheckIn from './pages/StaffCheckIn';
+import StaffCheckOut from './pages/StaffCheckOut';
 import GateValidator from './pages/GateValidator';
 import ParkingLogs from './pages/ParkingLogs';
 import ChangePassword from './pages/ChangePassword';
@@ -111,6 +112,7 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/check-in" element={<StaffCheckIn />} />
+                  <Route path="/check-out" element={<StaffCheckOut />} />
                   <Route path="/sessions" element={<ParkingSessions />} />
                   <Route path="/gate" element={<GateValidator />} />
                   <Route path="/logs" element={<ParkingLogs />} />
