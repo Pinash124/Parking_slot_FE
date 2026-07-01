@@ -2,12 +2,12 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authService } from './services/authService';
+import { WebSocketProvider } from './context/WebSocketContext';
 
 // Pages
 import Login from './pages/Login';
 import Register from './pages/Register';
 import LandingPage from './pages/LandingPage';
-import Dashboard from './pages/Dashboard';
 import DriverDashboard from './pages/DriverDashboard';
 import MyVehicles from './pages/MyVehicles';
 import MyReservations from './pages/MyReservations';
@@ -82,72 +82,74 @@ function AdminOrManagerRoute() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Routes>
-          {/* Guest routes */}
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+      <WebSocketProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Guest routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
 
-          {/* Protected customer portal: /customer/* */}
-          <Route
-            path="/customer/*"
-            element={
-              <ProtectedRoute allowedRoles={['CUSTOMER', 'USER']}>
-                <Routes>
-                  <Route path="/" element={<DriverDashboard />} />
-                  <Route path="/vehicles" element={<MyVehicles />} />
-                  <Route path="/reservations" element={<MyReservations />} />
-                  <Route path="/payment-return" element={<PaymentReturn />} />
-                  <Route path="/change-password" element={<ChangePassword />} />
-                  <Route path="*" element={<Navigate to="/customer" replace />} />
-                </Routes>
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected customer portal: /customer/* */}
+            <Route
+              path="/customer/*"
+              element={
+                <ProtectedRoute allowedRoles={['CUSTOMER', 'USER']}>
+                  <Routes>
+                    <Route path="/" element={<DriverDashboard />} />
+                    <Route path="/vehicles" element={<MyVehicles />} />
+                    <Route path="/reservations" element={<MyReservations />} />
+                    <Route path="/payment-return" element={<PaymentReturn />} />
+                    <Route path="/change-password" element={<ChangePassword />} />
+                    <Route path="*" element={<Navigate to="/customer" replace />} />
+                  </Routes>
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Protected staff portal: /staff/* */}
-          <Route
-            path="/staff/*"
-            element={
-              <ProtectedRoute allowedRoles={['STAFF', 'OPERATOR']}>
-                <Routes>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/check-in" element={<StaffCheckIn />} />
-                  <Route path="/check-out" element={<StaffCheckOut />} />
-                  <Route path="/sessions" element={<ParkingSessions />} />
-                  <Route path="/gate" element={<GateValidator />} />
-                  <Route path="/logs" element={<ParkingLogs />} />
-                  <Route path="/change-password" element={<ChangePassword />} />
-                  <Route path="*" element={<Navigate to="/staff" replace />} />
-                </Routes>
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected staff portal: /staff/* */}
+            <Route
+              path="/staff/*"
+              element={
+                <ProtectedRoute allowedRoles={['STAFF', 'OPERATOR']}>
+                  <Routes>
+                    <Route path="/" element={<StaffCheckIn />} />
+                    <Route path="/check-in" element={<StaffCheckIn />} />
+                    <Route path="/check-out" element={<StaffCheckOut />} />
+                    <Route path="/sessions" element={<ParkingSessions />} />
+                    <Route path="/gate" element={<GateValidator />} />
+                    <Route path="/logs" element={<ParkingLogs />} />
+                    <Route path="/change-password" element={<ChangePassword />} />
+                    <Route path="*" element={<Navigate to="/staff" replace />} />
+                  </Routes>
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Protected admin portal: /admin/* */}
-          <Route
-            path="/admin/*"
-            element={
-              <ProtectedRoute allowedRoles={['MANAGER', 'ADMIN', 'ADMINISTRATOR']}>
-                <Routes>
-                  <Route path="/" element={<AdminOrManagerRoute />} />
-                  <Route path="/dashboard" element={<AdminDashboard />} />
-                  <Route path="/policies" element={<AdminPolicies />} />
-                  <Route path="/users" element={<AdminUsers />} />
-                  <Route path="/logs" element={<ParkingLogs />} />
-                  <Route path="/sessions" element={<ParkingSessions />} />
-                  <Route path="/change-password" element={<ChangePassword />} />
-                  <Route path="*" element={<Navigate to="/admin" replace />} />
-                </Routes>
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected admin portal: /admin/* */}
+            <Route
+              path="/admin/*"
+              element={
+                <ProtectedRoute allowedRoles={['MANAGER', 'ADMIN', 'ADMINISTRATOR']}>
+                  <Routes>
+                    <Route path="/" element={<AdminOrManagerRoute />} />
+                    <Route path="/dashboard" element={<AdminDashboard />} />
+                    <Route path="/policies" element={<AdminPolicies />} />
+                    <Route path="/users" element={<AdminUsers />} />
+                    <Route path="/logs" element={<ParkingLogs />} />
+                    <Route path="/sessions" element={<ParkingSessions />} />
+                    <Route path="/change-password" element={<ChangePassword />} />
+                    <Route path="*" element={<Navigate to="/admin" replace />} />
+                  </Routes>
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Catch all fallback redirects to landing page */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
+            {/* Catch all fallback redirects to landing page */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </WebSocketProvider>
     </QueryClientProvider>
   );
 }
