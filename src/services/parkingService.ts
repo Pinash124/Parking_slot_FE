@@ -371,4 +371,20 @@ export const parkingService = {
     const response = await api.get<AuditLogResponse[]>('/api/audit-logs');
     return response.data;
   },
+
+  // ========== STAFF CHECK-OUT NEW ENDPOINTS ==========
+  prepareCheckout: async (payload: { licensePlate: string }): Promise<any> => {
+    const response = await api.post<any>('/api/payment-checkout/prepare', payload);
+    return response.data;
+  },
+
+  confirmCashPayment: async (payload: { sessionId: number; amount: number }): Promise<any> => {
+    const response = await api.post<any>('/api/payment-gateways/cash', payload);
+    return response.data;
+  },
+
+  validateExit: async (payload: { licensePlate: string }): Promise<any> => {
+    const response = await api.post<any>('/api/payment-checkout/validate-exit', payload);
+    return response.data;
+  },
 };
