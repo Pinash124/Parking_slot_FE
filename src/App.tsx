@@ -10,6 +10,7 @@ import LandingPage from './pages/LandingPage';
 import Dashboard from './pages/Dashboard';
 import DriverDashboard from './pages/DriverDashboard';
 import MyVehicles from './pages/MyVehicles';
+import MyReservations from './pages/MyReservations';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import ParkingSessions from './pages/ParkingSessions';
@@ -91,6 +92,7 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<DriverDashboard />} />
                   <Route path="/vehicles" element={<MyVehicles />} />
+                  <Route path="/reservations" element={<MyReservations />} />
                   <Route path="/change-password" element={<ChangePassword />} />
                   <Route path="*" element={<Navigate to="/customer" replace />} />
                 </Routes>

@@ -119,6 +119,16 @@ export const parkingService = {
     return response.data;
   },
 
+  getReservationsList: async (): Promise<ReservationResponse[]> => {
+    const response = await api.get<any>('/api/reservations');
+    if (response.data && Array.isArray(response.data)) {
+      return response.data;
+    } else if (response.data && Array.isArray(response.data.content)) {
+      return response.data.content;
+    }
+    return [];
+  },
+
   getReservationById: async (id: number): Promise<ReservationResponse> => {
     const response = await api.get<ReservationResponse>(`/api/reservations/${id}`);
     return response.data;
@@ -192,6 +202,11 @@ export const parkingService = {
     const response = await api.get<ZoneView[]>('/api/manager/zones', {
       params: floorId ? { floorId } : undefined,
     });
+    return response.data;
+  },
+
+  getManagementZones: async (): Promise<any[]> => {
+    const response = await api.get<any[]>('/api/management/zones');
     return response.data;
   },
 
