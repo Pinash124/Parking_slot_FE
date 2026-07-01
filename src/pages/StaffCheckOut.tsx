@@ -256,19 +256,19 @@ export default function StaffCheckOut() {
                       <svg className="w-10 h-10 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <h4 className="text-lg font-black tracking-wide uppercase">CỔNG ĐƯỢC PHÉP MỞ (BARRIER OPENED)</h4>
+                      <h4 className="text-lg font-black tracking-wide uppercase">BARRIER OPENED</h4>
                       <p className="text-[10px] text-emerald-800 leading-normal max-w-xs font-semibold">
-                        Giao dịch thanh toán trực tuyến/tiền mặt đã được đối soát. Vui lòng cho xe di chuyển qua chốt.
+                        {validatorResult.message || 'Lượt xe đã được xác thực thanh toán thành công.'}
                       </p>
                     </div>
                   ) : validatorResult.status === 'DENY_EXIT_WINDOW_EXPIRED' ? (
-                    <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-6.5 text-amber-700 flex flex-col items-center space-y-3">
-                      <svg className="w-10 h-10 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="bg-rose-500/10 border border-rose-500/25 rounded-2xl p-6.5 text-rose-700 flex flex-col items-center space-y-3">
+                      <svg className="w-10 h-10 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                       </svg>
-                      <h4 className="text-lg font-black tracking-wide uppercase">CỔNG BỊ KHÓA: QUÁ GIỜ ĐỔ XE (EXIT EXPIRED)</h4>
-                      <p className="text-[10px] text-amber-800 leading-normal max-w-xs font-semibold">
-                        Từ chối xe ra: Đã vượt quá 15 phút giới hạn di chuyển sau khi thanh toán. Cần tiến hành tái tính phí phát sinh ngoài giờ.
+                      <h4 className="text-lg font-black tracking-wide uppercase">BARRIER CLOSED: 15-Min Exit Window Expired. Recalculating fee</h4>
+                      <p className="text-[10px] text-rose-805 leading-normal max-w-xs font-semibold">
+                        Quá thời hạn 15 phút di chuyển xe ra sau khi thanh toán thành công. Yêu cầu tính lại phí đỗ phát sinh.
                       </p>
                     </div>
                   ) : (
@@ -276,9 +276,9 @@ export default function StaffCheckOut() {
                       <svg className="w-10 h-10 text-rose-550" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
                       </svg>
-                      <h4 className="text-lg font-black tracking-wide uppercase">CỔNG BỊ KHÓA: CHƯA THANH TOÁN (PAYMENT REQUIRED)</h4>
+                      <h4 className="text-lg font-black tracking-wide uppercase">BARRIER CLOSED: Payment Required</h4>
                       <p className="text-[10px] text-rose-800 leading-normal max-w-xs font-semibold">
-                        Từ chối xe ra: Biển số này chưa được thanh toán phí đỗ xe hoặc giao dịch chưa được đối soát thành công.
+                        {validatorResult.message || 'Phương tiện chưa thanh toán phí đỗ xe hoặc giao dịch chưa được xác nhận.'}
                       </p>
                     </div>
                   )}

@@ -387,4 +387,86 @@ export const parkingService = {
     const response = await api.post<any>('/api/payment-checkout/validate-exit', payload);
     return response.data;
   },
+
+  // ========== ADMIN - DASHBOARD OVERVIEW & INFRASTRUCTURE CRUD ==========
+  getAdminDashboardOverview: async (): Promise<{
+    totalActiveSessions: number;
+    occupiedSlots: number;
+    reservedSlots: number;
+    availableSlots: number;
+    todayRevenue: number;
+    pendingPaymentsCount: number;
+  }> => {
+    const response = await api.get<any>('/api/dashboard/overview');
+    return response.data;
+  },
+
+  getManagementBuildings: async (): Promise<BuildingView[]> => {
+    const response = await api.get<BuildingView[]>('/api/management/buildings');
+    return response.data;
+  },
+
+  createManagementBuilding: async (payload: BuildingRequest): Promise<BuildingView> => {
+    const response = await api.post<BuildingView>('/api/management/buildings', payload);
+    return response.data;
+  },
+
+  deleteManagementBuilding: async (id: number): Promise<void> => {
+    await api.delete(`/api/management/buildings/${id}`);
+  },
+
+  getManagementFloors: async (buildingId?: number): Promise<FloorView[]> => {
+    const response = await api.get<FloorView[]>('/api/management/floors', {
+      params: buildingId ? { buildingId } : undefined,
+    });
+    return response.data;
+  },
+
+  createManagementFloor: async (payload: FloorRequest): Promise<FloorView> => {
+    const response = await api.post<FloorView>('/api/management/floors', payload);
+    return response.data;
+  },
+
+  deleteManagementFloor: async (id: number): Promise<void> => {
+    await api.delete(`/api/management/floors/${id}`);
+  },
+
+  getManagementZonesAllowed: async (): Promise<ZoneView[]> => {
+    const response = await api.get<ZoneView[]>('/api/management/zones');
+    return response.data;
+  },
+
+  createManagementZone: async (payload: ZoneRequest): Promise<ZoneView> => {
+    const response = await api.post<ZoneView>('/api/management/zones', payload);
+    return response.data;
+  },
+
+  deleteManagementZone: async (id: number): Promise<void> => {
+    await api.delete(`/api/management/zones/${id}`);
+  },
+
+  getManagementSlotsList: async (): Promise<SlotView[]> => {
+    const response = await api.get<SlotView[]>('/api/management/slots');
+    return response.data;
+  },
+
+  patchManagementSlotStatus: async (id: number, status: string): Promise<SlotView> => {
+    const response = await api.patch<SlotView>(`/api/management/slots/${id}/status`, { status });
+    return response.data;
+  },
+
+  // ========== ADMIN - PRICING POLICIES NEW ENDPOINTS ==========
+  getManagementPolicies: async (): Promise<any[]> => {
+    const response = await api.get<any[]>('/api/management/policies');
+    return response.data;
+  },
+
+  createManagementPolicy: async (payload: any): Promise<any> => {
+    const response = await api.post<any>('/api/management/policies', payload);
+    return response.data;
+  },
+
+  deleteManagementPolicy: async (id: number): Promise<void> => {
+    await api.delete(`/api/management/policies/${id}`);
+  },
 };
