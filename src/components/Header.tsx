@@ -33,6 +33,7 @@ export default function Header() {
         return [
           { label: 'Tổng quan', path: '/customer' },
           { label: 'Xe của tôi', path: '/customer/vehicles' },
+          { label: 'Đặt chỗ trước', path: '/customer/reservations' },
         ];
       case 'ADMIN':
       case 'ADMINISTRATOR':
