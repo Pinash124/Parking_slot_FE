@@ -210,6 +210,25 @@ export const parkingService = {
     return response.data;
   },
 
+  getManagementSlots: async (status?: string): Promise<SlotView[]> => {
+    const response = await api.get<SlotView[]>('/api/management/slots', {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
+  getReservationsByKeyword: async (keyword: string): Promise<ReservationResponse[]> => {
+    const response = await api.get<any>('/api/reservations', {
+      params: { keyword }
+    });
+    if (response.data && Array.isArray(response.data)) {
+      return response.data;
+    } else if (response.data && Array.isArray(response.data.content)) {
+      return response.data.content;
+    }
+    return [];
+  },
+
   createZone: async (payload: ZoneRequest): Promise<ZoneView> => {
     const response = await api.post<ZoneView>('/api/manager/zones', payload);
     return response.data;

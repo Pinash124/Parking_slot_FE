@@ -48,6 +48,7 @@ export default function Header() {
       default:
         return [
           { label: 'Tổng quan', path: '/staff' },
+          { label: 'Cho xe vào', path: '/staff/check-in' },
           { label: 'Cho xe ra/vào', path: '/staff/sessions' },
           { label: 'Cổng Barie', path: '/staff/gate' },
           { label: 'Lịch sử lượt đỗ', path: '/staff/logs' },
