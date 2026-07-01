@@ -85,4 +85,25 @@ export const userPortalService = {
     );
     return response.data;
   },
+
+  // ========== USER PORTAL NEW PAYMENTS & SERVICES ==========
+  getUserPortalCurrentSession: async (): Promise<CurrentParkingSessionResponse> => {
+    const response = await api.get<CurrentParkingSessionResponse>('/api/user-portal/current');
+    return response.data;
+  },
+
+  addUserPortalService: async (payload: { sessionId: number; serviceId: number }): Promise<CurrentParkingSessionResponse> => {
+    const response = await api.post<CurrentParkingSessionResponse>('/api/user-portal/add-service', payload);
+    return response.data;
+  },
+
+  createPersonalQrPayment: async (payload: { sessionId: number; amount: number }): Promise<{ qrCodeUrl: string; transferDescription: string; amount: number }> => {
+    const response = await api.post<{ qrCodeUrl: string; transferDescription: string; amount: number }>('/api/payment-gateways/personal-qr', payload);
+    return response.data;
+  },
+
+  verifyVnpayReturn: async (queryString: string): Promise<{ success: boolean; amount: number; message?: string; transactionId?: string; exitDeadline?: string | null }> => {
+    const response = await api.get<{ success: boolean; amount: number; message?: string; transactionId?: string; exitDeadline?: string | null }>(`/api/payment-gateways/vnpay/return?${queryString}`);
+    return response.data;
+  },
 };

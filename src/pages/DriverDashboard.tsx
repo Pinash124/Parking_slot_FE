@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { authService } from '../services/authService';
 import { parkingService } from '../services/parkingService';
@@ -13,7 +14,13 @@ import type {
 export default function DriverDashboard() {
   const queryClient = useQueryClient();
   const currentUser = authService.getCurrentUser();
-  const [activeTab, setActiveTab] = useState<'info' | 'booking' | 'ticket' | 'feedback'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'booking' | 'ticket' | 'feedback'>('ticket'); // Default to ticket to show session
+
+  // Additional states for services and QR modal
+  const [selectedServiceId, setSelectedServiceId] = useState('');
+  const [personalQrData, setPersonalQrData] = useState<{ qrCodeUrl: string; transferDescription: string; amount: number } | null>(null);
+  const [showPersonalQrModal, setShowPersonalQrModal] = useState(false);
+  const [copiedDescription, setCopiedDescription] = useState(false);
 
   // Stats / Live Slots Query
   const { data: stats } = useQuery({
@@ -28,10 +35,10 @@ export default function DriverDashboard() {
     queryFn: () => parkingService.getPricingPolicies(),
   });
 
-  // Current active session query
+  // Current active session query pointing to user-portal endpoint
   const { data: currentSession } = useQuery({
     queryKey: ['currentSession'],
-    queryFn: () => userPortalService.getCurrentSession(),
+    queryFn: () => userPortalService.getUserPortalCurrentSession(),
     refetchInterval: 10000,
     retry: false,
   });
@@ -100,39 +107,54 @@ export default function DriverDashboard() {
     onError: (err: any) => alert('Lỗi Check-in: ' + (err.response?.data?.message || err.message)),
   });
 
+  // VNPAY redirect mutation
   const checkoutMutation = useMutation({
     mutationFn: async ({ sessionId, amount }: { sessionId: number; amount: number }) => {
-      if (paymentMethod === 'VNPAY') {
-        const res = await parkingService.createVnpayPayment({
-          sessionId,
-          amount,
-          returnUrl: window.location.origin + '/driver-dashboard',
-          orderInfo: `Thanh toan ve xe cho phien do #${sessionId}`
-        });
-        if (res.paymentUrl) {
-          window.open(res.paymentUrl, '_blank');
-          alert('Hệ thống đang mở cổng thanh toán VNPay. Vui lòng thanh toán ở cửa sổ mới.');
-        } else {
-          alert('Không thể tạo liên kết thanh toán VNPay.');
-        }
-        return res;
+      const res = await parkingService.createVnpayPayment({
+        sessionId,
+        amount,
+        returnUrl: window.location.origin + '/customer/payment-return',
+        orderInfo: `Thanh toan ve xe cho phien do #${sessionId}`
+      });
+      if (res.paymentUrl) {
+        // Direct redirect for better user flow
+        window.location.href = res.paymentUrl;
       } else {
-        const res = await parkingService.createCashPayment({
-          sessionId,
-          amount,
-          orderInfo: `Yeu cau thanh toan tien mat cho phien do #${sessionId}`
-        });
-        alert('Yêu cầu thanh toán tiền mặt đã được gửi. Vui lòng thanh toán trực tiếp cho nhân viên tại quầy ra.');
-        return res;
+        alert('Không thể tạo liên kết thanh toán VNPay.');
       }
+      return res;
     },
+    onError: (err: any) => alert('Lỗi thanh toán VNPay: ' + (err.response?.data?.message || err.message)),
+  });
+
+  // Personal QR payment mutation
+  const personalQrMutation = useMutation({
+    mutationFn: (payload: { sessionId: number; amount: number }) =>
+      userPortalService.createPersonalQrPayment(payload),
+    onSuccess: (data) => {
+      setPersonalQrData(data);
+      setShowPersonalQrModal(true);
+    },
+    onError: (err: any) => {
+      alert('Lỗi tạo mã QR chuyển khoản: ' + (err.response?.data?.message || err.message));
+    },
+  });
+
+  // Add service mutation
+  const addServiceMutation = useMutation({
+    mutationFn: (serviceId: number) =>
+      userPortalService.addUserPortalService({
+        sessionId: currentSession?.sessionId!,
+        serviceId,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['currentSession'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
-      queryClient.invalidateQueries({ queryKey: ['slots'] });
-      setShowPaymentModal(false);
+      alert('Đăng ký thêm dịch vụ bổ sung thành công!');
+      setSelectedServiceId('');
     },
-    onError: (err: any) => alert('Lỗi thanh toán: ' + (err.response?.data?.message || err.message)),
+    onError: (err: any) => {
+      alert('Lỗi khi thêm dịch vụ: ' + (err.response?.data?.message || err.message));
+    },
   });
 
   const submitFeedbackMutation = useMutation({
@@ -153,10 +175,6 @@ export default function DriverDashboard() {
   // --- STATE FOR CHECKIN SIMULATION ---
   const [simulateLicensePlate, setSimulateLicensePlate] = useState('');
   const [simulateSlotId, setSimulateSlotId] = useState('');
-
-  // --- PAYMENT MODAL ---
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'VNPAY' | 'CASH'>('VNPAY');
 
   // --- FEEDBACK ---
   const [feedbackCategory, setFeedbackCategory] = useState('OTHER');
@@ -218,6 +236,21 @@ export default function DriverDashboard() {
     });
   };
 
+  const handleAddService = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedServiceId) {
+      alert('Vui lòng chọn dịch vụ muốn thêm.');
+      return;
+    }
+    addServiceMutation.mutate(parseInt(selectedServiceId, 10));
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedDescription(true);
+    setTimeout(() => setCopiedDescription(false), 2000);
+  };
+
   const availableSlots = stats?.availableSlots ?? 0;
   const occupiedSlots = stats?.occupiedSlots ?? 0;
   const totalSlots = availableSlots + occupiedSlots;
@@ -245,24 +278,24 @@ export default function DriverDashboard() {
         {/* Tab Selection Navigation */}
         <div className="flex border-b border-slate-200 mb-6 overflow-x-auto space-x-2 pb-1 scrollbar-none">
           <button
+            onClick={() => setActiveTab('ticket')}
+            className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap relative cursor-pointer ${
+              activeTab === 'ticket' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
+            }`}
+          >
+            Lượt đỗ xe hiện tại (Vé xe)
+            {currentSession && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
+            )}
+          </button>
+
+          <button
             onClick={() => setActiveTab('info')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'info' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
             }`}
           >
             Bãi Xe & Bảng Giá
-          </button>
-          
-          <button
-            onClick={() => setActiveTab('ticket')}
-            className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap relative cursor-pointer ${
-              activeTab === 'ticket' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
-            }`}
-          >
-            Vé Xe Của Tôi
-            {currentSession && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-rose-500 rounded-full"></span>
-            )}
           </button>
 
           <button
@@ -284,7 +317,228 @@ export default function DriverDashboard() {
           </button>
         </div>
 
-        {/* Tab 1: Info */}
+        {/* Tab: Active Session (Ticket) */}
+        {activeTab === 'ticket' && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            {!currentSession ? (
+              <div className="bg-white border border-slate-200 p-12 rounded-3xl shadow-sm text-center space-y-6 max-w-md mx-auto">
+                <div className="w-16 h-16 bg-slate-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-800">Không có lượt đỗ xe hoạt động</h3>
+                  <p className="text-xs text-slate-450 mt-1 max-w-xs mx-auto leading-relaxed">
+                    Hiện bạn không có xe đỗ tại hầm hoặc chưa có phiên đỗ nào được kích hoạt. Hãy đăng ký đặt lịch giữ chỗ trước để tiết kiệm thời gian!
+                  </p>
+                </div>
+
+                <div className="pt-2 flex flex-col space-y-3.5">
+                  <Link
+                    to="/customer/reservations"
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-550 active:scale-98 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer inline-block"
+                  >
+                    Đặt lịch giữ chỗ đỗ xe &rarr;
+                  </Link>
+                </div>
+
+                {/* Simulate Check-in Block for Testing */}
+                <div className="pt-6 border-t border-slate-100 text-left">
+                  <form onSubmit={handleSimulateCheckIn} className="space-y-3">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Giả lập xe vào hầm (Chỉ dành cho thử nghiệm)</p>
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Biển số xe</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ví dụ: 30A-123.45"
+                        value={simulateLicensePlate}
+                        onChange={(e) => setSimulateLicensePlate(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs uppercase font-bold focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Chọn ô đỗ (Vị trí)</label>
+                      <select
+                        value={simulateSlotId}
+                        onChange={(e) => setSimulateSlotId(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
+                        required
+                      >
+                        <option value="">-- Chọn Vị Trí --</option>
+                        {availableSlotsList.map((slot) => (
+                          <option key={slot.id} value={slot.id}>
+                            {slot.slotCode} ({slot.vehicleTypeName || `Loại #${slot.vehicleTypeId}`})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={checkInMutation.isPending}
+                      className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-[10px] font-bold cursor-pointer transition"
+                    >
+                      {checkInMutation.isPending ? 'Đang kích hoạt...' : 'Kích Hoạt Vé Xe Giả Lập'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                {/* Session Card Info */}
+                <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                  <div className="bg-slate-50/50 p-6 border-b border-dashed border-slate-200 text-center relative">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vé Xe Điện Tử</p>
+                    <h4 className="text-2xl font-black text-indigo-650 mt-1">{currentSession.ticketCode}</h4>
+                    <p className="text-[10px] text-slate-450 mt-0.5">Trạng thái: <span className="font-extrabold uppercase text-indigo-600">{currentSession.status}</span></p>
+                  </div>
+
+                  <div className="p-6 space-y-5 text-xs font-medium">
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400">Biển số xe:</span>
+                      <span className="font-bold text-slate-900 text-sm">{currentSession.licensePlate || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400">Phân loại xe:</span>
+                      <span className="font-semibold text-slate-750">{currentSession.vehicleTypeName || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400">Vị trí đỗ (Slot):</span>
+                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-100">{currentSession.slotCode || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400">Khu vực đỗ (Zone):</span>
+                      <span className="font-semibold text-slate-700">{currentSession.zoneName || 'N/A'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400">Thời điểm vào bãi:</span>
+                      <span className="font-semibold text-slate-750">
+                        {currentSession.entryTime ? new Date(currentSession.entryTime).toLocaleString('vi-VN') : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
+                      <span className="text-slate-400">Thời gian đỗ:</span>
+                      <span className="font-bold text-slate-800 font-mono tracking-wide">{liveDurationStr}</span>
+                    </div>
+
+                    {/* Additional Services List */}
+                    {currentSession.additionalServices && currentSession.additionalServices.length > 0 && (
+                      <div className="py-2 border-b border-slate-50 space-y-2">
+                        <span className="text-slate-400 block mb-1">Dịch vụ bổ sung đã đăng ký:</span>
+                        <div className="space-y-1.5">
+                          {currentSession.additionalServices.map((svc: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center bg-indigo-50/30 p-2.5 rounded-xl border border-indigo-50/50 text-[11px] font-semibold text-indigo-950">
+                              <span>✨ {svc.serviceName || `Dịch vụ #${svc.serviceId}`}</span>
+                              <span>{Number(svc.price).toLocaleString('vi-VN')}đ</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Select Form to Add Add-on Services */}
+                    <div className="pt-2">
+                      <form onSubmit={handleAddService} className="flex items-center space-x-2.5">
+                        <div className="flex-1">
+                          <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">
+                            Chọn dịch vụ bổ sung
+                          </label>
+                          <select
+                            value={selectedServiceId}
+                            onChange={(e) => setSelectedServiceId(e.target.value)}
+                            className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none"
+                          >
+                            <option value="">-- Chọn Dịch Vụ --</option>
+                            <option value="1">Rửa xe hút bụi ngoại thất (+50.000đ)</option>
+                            <option value="2">Vệ sinh khoang máy chi tiết (+100.000đ)</option>
+                            <option value="3">Bơm lốp & Đo áp suất tự động (+15.000đ)</option>
+                          </select>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={addServiceMutation.isPending}
+                          className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 border border-indigo-100 rounded-xl text-xs font-bold cursor-pointer transition self-end disabled:opacity-50"
+                        >
+                          {addServiceMutation.isPending ? 'Đang thêm...' : '+ Thêm'}
+                        </button>
+                      </form>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                      <span className="text-slate-500 font-bold text-sm">Tổng phí tạm tính:</span>
+                      <span className="text-2xl font-black text-indigo-650">{(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Checkout Payment Options */}
+                <div className="lg:col-span-1 space-y-6">
+                  {currentSession.status === 'PAYMENT_PENDING' || currentSession.status === 'COMPLETED' ? (
+                    <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm text-center space-y-5">
+                      <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-500">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-extrabold text-slate-800">ĐÃ HOÀN TẤT THANH TOÁN</h4>
+                        <p className="text-[10px] text-slate-450 mt-1">Barrier cổng ra sẽ tự động mở khi xe của bạn di chuyển tới khu vực camera quét biển số.</p>
+                      </div>
+                      
+                      {/* Exit QR for safety backup */}
+                      <div className="bg-slate-50 border border-slate-200 p-4.5 rounded-2xl inline-block w-full">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">QR quét cổng ra dự phòng</p>
+                        <div className="w-28 h-28 bg-white border border-slate-200 rounded-lg flex items-center justify-center p-1.5 mx-auto">
+                          <svg className="w-full h-full text-slate-800" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M2 2h6v6H2V2zm1.5 1.5v3h3v-3h-3zM2 16h6v6H2v-6zm1.5 1.5v3h3v-3h-3zM16 2h6v6h-6V2zm1.5 1.5v3h3v-3h-3zM12 2h2v2h-2V2zm0 4h2v2h-2V6zm2-2h2v2h-2V4zm-2 6h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm6-4h2v2h-2v-2zm0 4h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2zm-6 2h2v2h-2v-2zm6 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2z" />
+                          </svg>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+                      <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Thanh Toán Trực Tuyến</h4>
+                      <p className="text-[10px] text-slate-400">Chọn một trong hai hình thức thanh toán trực tiếp để thanh toán hóa đơn lượt đỗ:</p>
+
+                      {/* Payment Choice Card 1: VNPAY */}
+                      <button
+                        onClick={() => checkoutMutation.mutate({ sessionId: currentSession.sessionId, amount: currentSession.estimatedFee || 0 })}
+                        disabled={checkoutMutation.isPending}
+                        className="w-full text-left p-4.5 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/5 transition cursor-pointer flex items-start space-x-3 group"
+                      >
+                        <div className="w-10 h-10 bg-indigo-50 group-hover:bg-indigo-100 rounded-xl flex items-center justify-center font-black text-indigo-650 shrink-0 text-sm">
+                          VN
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-slate-800 text-xs block group-hover:text-indigo-650 transition">Cổng VNPAY Gateway</span>
+                          <span className="text-[9px] text-slate-450 mt-0.5 block leading-normal">Thanh toán qua ví điện tử, thẻ ATM nội địa, hoặc thẻ quốc tế Visa/MasterCard.</span>
+                        </div>
+                      </button>
+
+                      {/* Payment Choice Card 2: Personal QR */}
+                      <button
+                        onClick={() => personalQrMutation.mutate({ sessionId: currentSession.sessionId, amount: currentSession.estimatedFee || 0 })}
+                        disabled={personalQrMutation.isPending}
+                        className="w-full text-left p-4.5 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/5 transition cursor-pointer flex items-start space-x-3 group"
+                      >
+                        <div className="w-10 h-10 bg-emerald-50 group-hover:bg-emerald-100 rounded-xl flex items-center justify-center font-bold text-emerald-650 shrink-0 text-xs">
+                          QR
+                        </div>
+                        <div>
+                          <span className="font-extrabold text-slate-800 text-xs block group-hover:text-emerald-650 transition">Chuyển khoản QR cá nhân</span>
+                          <span className="text-[9px] text-slate-450 mt-0.5 block leading-normal">Quét mã chuyển khoản nhanh nội bộ. Xác nhận tức thời.</span>
+                        </div>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 2: Info */}
         {activeTab === 'info' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
@@ -301,51 +555,48 @@ export default function DriverDashboard() {
                       </svg>
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Thời gian mở cửa</p>
-                      <p className="text-sm font-bold text-slate-800 mt-0.5">Hoạt động 24/7</p>
-                      <p className="text-xs text-slate-400 mt-1">Cả các ngày nghỉ lễ, Tết và Chủ Nhật</p>
+                      <h4 className="font-bold text-slate-800 text-sm">Thời gian phục vụ</h4>
+                      <p className="text-xs text-slate-450 mt-0.5 leading-relaxed">Chúng tôi mở cửa đón phương tiện gửi 24 giờ một ngày, 7 ngày một tuần kể cả ngày nghỉ lễ.</p>
                     </div>
                   </div>
 
                   <div className="flex items-start space-x-3.5">
                     <div className="p-2.5 bg-slate-100 rounded-xl text-slate-650">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10M21 16V10a2 2 0 00-2-2h-5v8" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
                       </svg>
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Loại xe hỗ trợ</p>
-                      <p className="text-sm font-bold text-slate-800 mt-0.5">Mọi phương tiện theo thiết lập bãi</p>
-                      <p className="text-xs text-slate-400 mt-1">Hệ thống hỗ trợ đỗ xe theo phân khu riêng biệt</p>
+                      <h4 className="font-bold text-slate-800 text-sm">Các loại xe hỗ trợ gửi</h4>
+                      <p className="text-xs text-slate-450 mt-0.5 leading-relaxed">Hầm đỗ hỗ trợ các phương tiện Xe Máy, Ô Tô Con dưới 9 chỗ và Xe Đạp Điện.</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Price list */}
+              {/* Pricing table */}
               <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
                 <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-150 pb-3 flex items-center">
-                  <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2"></span>
-                  Bảng Giá Gửi Xe Chi Tiết
+                  <span className="w-2.5 h-2.5 bg-purple-600 rounded-full mr-2"></span>
+                  Bảng Giá Gửi Xe Hiện Tại
                 </h3>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
+                  <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-100 font-bold text-slate-400 uppercase">
-                        <th className="pb-3">Phân loại / Chính sách</th>
-                        <th className="pb-3 text-right">Phí theo Giờ</th>
-                        <th className="pb-3 text-right">Trọn Ngày (24h)</th>
-                        <th className="pb-3 text-right">Phí Vé Tháng</th>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                        <th className="pb-3 pr-4">Loại xe</th>
+                        <th className="pb-3 px-4 text-right">Phí theo giờ (1h đầu)</th>
+                        <th className="pb-3 px-4 text-right">Phí theo ngày (24h)</th>
+                        <th className="pb-3 pl-4 text-right">Mất thẻ/Vé phạt</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                    <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
                       {pricingPolicies.map((policy) => (
-                        <tr key={policy.id} className="hover:bg-slate-50 transition">
-                          <td className="py-3.5 font-bold text-slate-800">{policy.policyName} ({policy.vehicleTypeName})</td>
-                          <td className="py-3.5 text-right">{(policy.hourlyRate ?? 0).toLocaleString('vi-VN')}đ</td>
-                          <td className="py-3.5 text-right">{(policy.dailyRate ?? 0).toLocaleString('vi-VN')}đ</td>
-                          <td className="py-3.5 text-right text-indigo-650 font-bold">{(policy.monthlyRate ?? 0).toLocaleString('vi-VN')}đ</td>
+                        <tr key={policy.id} className="hover:bg-slate-50/50 transition">
+                          <td className="py-3.5 pr-4 text-slate-900 font-bold">{policy.vehicleTypeName || 'N/A'}</td>
+                          <td className="py-3.5 px-4 text-right text-indigo-650">{(policy.hourlyRate ?? 0).toLocaleString()}đ</td>
+                          <td className="py-3.5 px-4 text-right text-indigo-650">{(policy.dailyRate ?? 0).toLocaleString()}đ</td>
+                          <td className="py-3.5 pl-4 text-right text-rose-600">{(policy.lostTicketFee ?? 0).toLocaleString()}đ</td>
                         </tr>
                       ))}
                     </tbody>
@@ -354,31 +605,37 @@ export default function DriverDashboard() {
               </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm text-center">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Trạng thái chỗ trống</h3>
-                <div className="inline-flex items-center justify-center relative w-36 h-36 mb-4">
-                  <svg className="w-full h-full transform -rotate-90">
-                    <circle cx="72" cy="72" r="60" className="stroke-slate-100" strokeWidth="12" fill="transparent" />
-                    <circle cx="72" cy="72" r="60" className="stroke-indigo-650 transition-all duration-500" strokeWidth="12" fill="transparent"
-                      strokeDasharray={2 * Math.PI * 60}
-                      strokeDashoffset={2 * Math.PI * 60 * (1 - fillRate / 100)}
-                    />
-                  </svg>
-                  <div className="absolute flex flex-col justify-center items-center">
-                    <span className="text-3xl font-extrabold text-slate-800">{availableSlots}</span>
-                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Slot trống</span>
+            {/* Parking live slots info */}
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 mb-1">Công Suất Hầm Đỗ Xe</h3>
+                <p className="text-slate-400 text-xs mb-4">Số liệu trực quan về số chỗ đỗ trống hiện thời</p>
+                
+                <div className="relative pt-1 mb-4">
+                  <div className="flex mb-2 items-center justify-between text-xs">
+                    <span className="text-slate-450 font-bold">Tỉ lệ lấp đầy hầm:</span>
+                    <span className="font-extrabold text-indigo-600">{fillRate}%</span>
+                  </div>
+                  <div className="overflow-hidden h-2.5 text-xs flex rounded-full bg-slate-100 border border-slate-200">
+                    <div
+                      style={{ width: `${fillRate}%` }}
+                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-600 transition-all duration-500"
+                    ></div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs border-t border-slate-100 pt-4">
-                  <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-center">
-                    <p className="text-slate-400 font-medium">Đang trống</p>
-                    <p className="text-lg font-bold text-emerald-700 mt-0.5">{availableSlots}</p>
+                <div className="space-y-2 text-xs font-semibold">
+                  <div className="flex justify-between py-1.5 border-b border-slate-50">
+                    <span className="text-slate-400">Tổng chỗ đỗ:</span>
+                    <span className="text-slate-800">{totalSlots} chỗ</span>
                   </div>
-                  <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-center">
-                    <p className="text-slate-400 font-medium">Đã đỗ</p>
-                    <p className="text-lg font-bold text-slate-700 mt-0.5">{occupiedSlots}</p>
+                  <div className="flex justify-between py-1.5 border-b border-slate-50">
+                    <span className="text-slate-400">Đã đỗ (Bận):</span>
+                    <span className="text-indigo-600">{occupiedSlots} chỗ</span>
+                  </div>
+                  <div className="flex justify-between py-1.5">
+                    <span className="text-slate-400">Còn trống:</span>
+                    <span className="text-emerald-600 font-bold">{availableSlots} chỗ</span>
                   </div>
                 </div>
               </div>
@@ -386,142 +643,7 @@ export default function DriverDashboard() {
           </div>
         )}
 
-        {/* Tab 2: Ticket / Current Session */}
-        {activeTab === 'ticket' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            {!currentSession ? (
-              <div className="bg-white border border-slate-200 p-8 rounded-2xl shadow-sm text-center space-y-4">
-                <div className="w-16 h-16 bg-slate-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
-                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-slate-800">Không có lượt đỗ xe hoạt động</h3>
-                  <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
-                    Hiện bạn chưa có xe đỗ tại hầm hoặc chưa có phiên đỗ xe nào được kích hoạt. Sử dụng form giả lập phía dưới để bắt đầu phiên đỗ.
-                  </p>
-                </div>
-
-                {/* Simulate Check-in */}
-                <div className="max-w-sm mx-auto pt-6 border-t border-slate-150 text-left">
-                  <form onSubmit={handleSimulateCheckIn} className="space-y-3.5">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Giả lập xe vào bãi đỗ (Simulate Check-in)</p>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-450 uppercase mb-1">Nhập Biển Số Xe</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ví dụ: 30A-999.88"
-                        value={simulateLicensePlate}
-                        onChange={(e) => setSimulateLicensePlate(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-sm uppercase font-bold focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-450 uppercase mb-1">Chọn Vị Trí Ô Đỗ (Slot)</label>
-                      <select
-                        value={simulateSlotId}
-                        onChange={(e) => setSimulateSlotId(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none"
-                        required
-                      >
-                        <option value="">-- Chọn Vị Trí --</option>
-                        {availableSlotsList.map((slot) => (
-                          <option key={slot.id} value={slot.id}>
-                            {slot.slotCode} ({slot.vehicleTypeName || `Loại #${slot.vehicleTypeId}`})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={checkInMutation.isPending}
-                      className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-sm transition"
-                    >
-                      {checkInMutation.isPending ? 'Đang gửi...' : 'Gửi Yêu Cầu Check-In'}
-                    </button>
-                  </form>
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-lg border-t-8 border-indigo-655">
-                  <div className="bg-slate-50/50 p-6 border-b border-dashed border-slate-200 text-center relative">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Vé Xe Điện Tử</p>
-                    <h4 className="text-2xl font-extrabold text-indigo-655 mt-1">{currentSession.ticketCode}</h4>
-                    <p className="text-xs text-slate-400 mt-0.5">Trạng thái: <span className="font-extrabold uppercase text-indigo-600">{currentSession.status}</span></p>
-                  </div>
-
-                  <div className="p-6 space-y-4 text-xs">
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400 font-medium">Biển số xe:</span>
-                      <span className="font-bold text-slate-800 text-sm">{currentSession.licensePlate || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400 font-medium">Phân loại xe:</span>
-                      <span className="font-semibold text-slate-805">{currentSession.vehicleTypeName || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400 font-medium">Vị trí đỗ (Slot):</span>
-                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-155">{currentSession.slotCode || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400 font-medium">Khu đỗ:</span>
-                      <span className="font-semibold text-slate-700">{currentSession.zoneName || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400 font-medium">Giờ xe vào:</span>
-                      <span className="font-semibold text-slate-750">
-                        {currentSession.entryTime ? new Date(currentSession.entryTime).toLocaleString('vi-VN') : 'N/A'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400 font-medium">Thời gian đỗ:</span>
-                      <span className="font-bold text-slate-800 font-mono">{liveDurationStr}</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-2">
-                      <span className="text-slate-400 font-bold">Phí tạm tính (ước tính):</span>
-                      <span className="text-xl font-extrabold text-indigo-650">{(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ</span>
-                    </div>
-
-                    {currentSession.status === 'PAYMENT_PENDING' || currentSession.status === 'COMPLETED' ? (
-                      <div className="bg-emerald-50 border border-emerald-250 text-emerald-805 p-3 rounded-2xl text-center font-bold text-xs">
-                        ĐÃ THANH TOÁN (BARIE RA ĐÃ SẴN SÀNG)
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          setPaymentMethod('VNPAY');
-                          setShowPaymentModal(true);
-                        }}
-                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer shadow-sm transition"
-                      >
-                        Thực Hiện Thanh Toán Online
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Identity QR Code */}
-                <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm text-center space-y-4">
-                  <h4 className="font-bold text-slate-800 text-sm">Mã QR Vé Định Danh Của Bạn</h4>
-                  <p className="text-xs text-slate-400">Đưa mã này trước camera tại Barrier cổng ra để hệ thống mở barie tự động.</p>
-                  
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl inline-block">
-                    <div className="w-36 h-36 bg-white border border-slate-250 rounded-xl flex items-center justify-center p-2 mx-auto relative group">
-                      <svg className="w-full h-full text-slate-800" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M2 2h6v6H2V2zm1.5 1.5v3h3v-3h-3zM2 16h6v6H2v-6zm1.5 1.5v3h3v-3h-3zM16 2h6v6h-6V2zm1.5 1.5v3h3v-3h-3zM12 2h2v2h-2V2zm0 4h2v2h-2V6zm2-2h2v2h-2V4zm-2 6h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm6-4h2v2h-2v-2zm0 4h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2zm-6 2h2v2h-2v-2zm6 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2z" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Tab 3: Booking / Reservations */}
+        {/* Tab 3: Booking Form */}
         {activeTab === 'booking' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
@@ -566,122 +688,128 @@ export default function DriverDashboard() {
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-500 mb-1.5">Thời gian bắt đầu gửi</label>
+                  <label className="block font-bold text-slate-500 mb-1.5">Giờ Xe Vào Dự Kiến</label>
                   <input
                     type="datetime-local"
-                    required
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-805 focus:outline-none font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-500 mb-1.5">Thời gian kết thúc dự kiến</label>
+                  <label className="block font-bold text-slate-500 mb-1.5">Giờ Xe Ra Dự Kiến</label>
                   <input
                     type="datetime-local"
-                    required
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-805 focus:outline-none font-semibold"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
+                    required
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={bookingMutation.isPending}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm disabled:opacity-50"
+                  className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm"
                 >
-                  {bookingMutation.isPending ? 'Đang xử lý...' : 'Xác Nhận Đăng Ký Đặt Trước'}
+                  {bookingMutation.isPending ? 'Đang đăng ký...' : 'Xác Nhận Đăng Ký Đặt Lịch'}
                 </button>
               </form>
             </div>
 
-            <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
-              <h3 className="text-base font-bold text-slate-800 pb-3 border-b border-slate-100 flex items-center justify-between">
-                <span>Danh Sách Lượt Đặt Chỗ Trước</span>
-                <span className="text-xs text-slate-400 font-semibold">{bookings.length} Lượt đặt</span>
-              </h3>
+            {/* Reservation History List in tab */}
+            <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col">
+              <h3 className="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-3">Các yêu cầu đặt lịch của bạn</h3>
+              
+              {bookings.length === 0 ? (
+                <div className="flex-1 flex items-center justify-center text-slate-400 text-xs py-10">
+                  Bạn chưa đăng ký đặt lịch đỗ xe lần nào
+                </div>
+              ) : (
+                <div className="space-y-3.5 overflow-y-auto max-h-[380px] pr-1">
+                  {bookings.map((booking) => {
+                    const statusClass = 
+                      booking.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                      booking.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                      'bg-slate-50 text-slate-500 border-slate-150';
 
-              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                {bookings.map((book) => (
-                  <div key={book.id} className="border border-slate-150 p-4 rounded-2xl hover:border-indigo-355 transition bg-slate-50/20 flex justify-between items-center text-xs">
-                    <div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase">Mã Đặt Chỗ: #{book.id}</span>
-                      <h4 className="text-sm font-extrabold text-slate-800 mt-0.5">{book.licensePlate || `Xe #${book.vehicleId}`}</h4>
-                      <p className="text-[11px] text-slate-555 mt-1 font-semibold">
-                        Thời gian: {book.startTime ? new Date(book.startTime).toLocaleString('vi-VN') : 'N/A'} → {book.endTime ? new Date(book.endTime).toLocaleString('vi-VN') : 'N/A'}
-                      </p>
-                      <p className="text-[10px] text-slate-400 font-bold mt-0.5">Khu vực: {book.zoneName || `Zone #${book.zoneId}`}</p>
-                    </div>
-
-                    <div className="text-right space-y-2">
-                      <span className={`inline-block text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                        book.status === 'APPROVED' ? 'bg-emerald-50 border-emerald-250 text-emerald-805' : 'bg-slate-100 border-slate-200 text-slate-500'
-                      }`}>
-                        {book.status}
-                      </span>
-                      {book.status === 'PENDING' && (
-                        <div>
-                          <button
-                            onClick={() => cancelBookingMutation.mutate(book.id)}
-                            className="text-[10px] font-bold text-rose-600 hover:underline cursor-pointer"
-                          >
-                            Hủy đặt chỗ
-                          </button>
+                    return (
+                      <div 
+                        key={booking.id} 
+                        className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row justify-between sm:items-center text-xs gap-3"
+                      >
+                        <div className="space-y-1">
+                          <p className="font-bold text-slate-800">Biển số: {booking.licensePlate || `Xe #${booking.vehicleId}`}</p>
+                          <p className="text-slate-450 text-[10px]">
+                            Phân khu đỗ: {booking.zoneName || `Phân khu #${booking.zoneId}`}
+                          </p>
+                          <p className="text-slate-500 text-[10px]">
+                            Vào: {booking.startTime ? new Date(booking.startTime).toLocaleString('vi-VN') : 'N/A'} • 
+                            Ra: {booking.endTime ? new Date(booking.endTime).toLocaleString('vi-VN') : 'N/A'}
+                          </p>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {bookings.length === 0 && (
-                  <div className="text-center py-12 text-slate-400">Bạn chưa đăng ký đặt chỗ nào.</div>
-                )}
-              </div>
+                        <div className="flex items-center space-x-3 self-end sm:self-center">
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${statusClass}`}>
+                            {booking.status === 'APPROVED' ? 'Đã duyệt' : booking.status === 'PENDING' ? 'Chờ duyệt' : booking.status}
+                          </span>
+                          {booking.status === 'PENDING' && (
+                            <button
+                              onClick={() => cancelBookingMutation.mutate(booking.id)}
+                              className="text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 px-2 py-1 rounded-lg text-[10px] font-bold transition"
+                            >
+                              Hủy đặt
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Tab 4: Feedback */}
+        {/* Tab 4: Feedback Form */}
         {activeTab === 'feedback' && (
-          <div className="max-w-2xl mx-auto bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
-            <div className="text-center space-y-1.5">
-              <h3 className="text-lg font-bold text-slate-800">Gửi Ý Kiến Phản Hồi</h3>
-              <p className="text-sm text-slate-400">Chúng tôi luôn lắng nghe ý kiến phản ánh để nâng cao chất lượng dịch vụ vận hành bãi đỗ xe.</p>
-            </div>
-
-            <form onSubmit={handleFeedbackSubmit} className="space-y-4 text-xs">
+          <div className="max-w-xl mx-auto bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+            <h3 className="text-base font-bold text-slate-800 pb-3 border-b border-slate-100 mb-5">
+              Gửi ý kiến đóng góp & Phản hồi
+            </h3>
+            
+            <form onSubmit={handleFeedbackSubmit} className="space-y-4 text-xs font-semibold">
               <div>
-                <label className="block font-bold text-slate-500 mb-2">Loại Phản Hồi</label>
+                <label className="block text-slate-450 mb-1.5 uppercase tracking-wide">Chủ đề phản hồi</label>
                 <select
                   value={feedbackCategory}
                   onChange={(e) => setFeedbackCategory(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-3 text-slate-850 text-sm focus:outline-none font-bold"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none"
                 >
-                  <option value="LOST_TICKET">Báo Mất Vé Xe</option>
-                  <option value="INCORRECT_FEE">Khiếu nại sai phí đỗ</option>
-                  <option value="CAR_LOCATING">Khó tìm vị trí ô đỗ</option>
-                  <option value="SLOT_OCCUPIED">Vị trí ô đỗ bị chiếm</option>
-                  <option value="OTHER">Góp ý khác</option>
+                  <option value="INCIDENT">Báo cáo sự cố tại bãi đỗ</option>
+                  <option value="COMPLAINT">Khiếu nại dịch vụ / thái độ nhân viên</option>
+                  <option value="SUGGESTION">Đề xuất cải tiến hệ thống</option>
+                  <option value="OTHER">Chủ đề khác</option>
                 </select>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-500 mb-2">Chi tiết phản hồi</label>
+                <label className="block text-slate-450 mb-1.5 uppercase tracking-wide">Nội dung chi tiết</label>
                 <textarea
                   required
                   rows={4}
-                  placeholder="Mô tả cụ thể vấn đề hoặc phản hồi của bạn..."
                   value={feedbackContent}
                   onChange={(e) => setFeedbackContent(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-3 text-slate-800 placeholder-slate-450 focus:outline-none text-sm leading-relaxed"
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-slate-800 focus:outline-none placeholder-slate-400 font-medium"
+                  placeholder="Vui lòng nhập chi tiết sự việc, vị trí đỗ xe hoặc ý kiến đóng góp của bạn để chúng tôi phục vụ tốt hơn..."
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={submitFeedbackMutation.isPending}
-                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-sm disabled:opacity-50 text-xs"
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-md disabled:opacity-50"
               >
                 {submitFeedbackMutation.isPending ? 'Đang gửi...' : 'Gửi Phản Hồi Ngay'}
               </button>
@@ -690,72 +818,76 @@ export default function DriverDashboard() {
         )}
       </main>
 
-      {/* PAYMENT MODAL */}
-      {showPaymentModal && currentSession && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-250 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden">
-            <div className="bg-slate-50/50 px-6 py-4.5 border-b border-slate-100 flex justify-between items-center">
-              <h3 className="font-bold text-slate-850 text-base">Thanh Toán Hóa Đơn Lượt Đỗ #{currentSession.ticketCode}</h3>
+      {/* PERSONAL QR MODAL */}
+      {showPersonalQrModal && personalQrData && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 cursor-default" onClick={() => setShowPersonalQrModal(false)}></div>
+          
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative z-10 text-center animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
+              <h3 className="font-bold text-slate-800 text-sm">Chuyển khoản QR cá nhân</h3>
               <button
-                onClick={() => setShowPaymentModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1.5 flex items-center justify-center text-sm font-bold border border-slate-200 rounded-lg w-7 h-7"
+                onClick={() => setShowPersonalQrModal(false)}
+                className="text-slate-400 hover:text-slate-650 p-1.5 hover:bg-slate-100 rounded-lg transition cursor-pointer"
               >
-                Đóng
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
 
-            <div className="p-6 space-y-6 text-xs font-semibold">
-              <div className="p-4 bg-indigo-50/30 border border-indigo-100 rounded-2xl flex justify-between items-center">
-                <div>
-                  <p className="text-slate-400 font-bold uppercase tracking-wider">Tổng số tiền thanh toán</p>
-                  <p className="text-2xl font-extrabold text-indigo-650 mt-1">{(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ</p>
+            {/* QR Image Display */}
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl inline-block mb-4">
+              {personalQrData.qrCodeUrl ? (
+                <img
+                  src={personalQrData.qrCodeUrl}
+                  alt="Mã QR chuyển khoản cá nhân"
+                  className="w-44 h-44 mx-auto rounded-xl shadow-sm"
+                />
+              ) : (
+                <div className="w-44 h-44 bg-slate-200 rounded-xl flex items-center justify-center text-xs text-slate-400 font-bold mx-auto">
+                  QR Code Placeholder
                 </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-slate-400 font-bold uppercase tracking-wider">Phương thức thanh toán</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setPaymentMethod('VNPAY')}
-                    className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center space-y-1.5 ${
-                      paymentMethod === 'VNPAY' ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650' : 'border-slate-200 hover:bg-slate-50 text-slate-650'
-                    }`}
-                  >
-                    <span>Thanh toán online (VNPay)</span>
-                  </button>
-                  <button
-                    onClick={() => setPaymentMethod('CASH')}
-                    className={`p-3 rounded-xl border text-center transition cursor-pointer flex flex-col items-center space-y-1.5 ${
-                      paymentMethod === 'CASH' ? 'border-indigo-600 bg-indigo-50/50 text-indigo-650' : 'border-slate-200 hover:bg-slate-50 text-slate-650'
-                    }`}
-                  >
-                    <span>Tiền mặt (tại quầy)</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-slate-100">
-                {paymentMethod === 'VNPAY' ? (
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-3.5">
-                    <p className="text-slate-400 font-bold uppercase">Cổng thanh toán VNPay Sandbox</p>
-                    <p className="text-slate-500">Sau khi xác nhận, hệ thống sẽ mở cổng thanh toán VNPay để bạn thực hiện thanh toán online qua thẻ ngân hàng hoặc ứng dụng Mobile Banking.</p>
-                  </div>
-                ) : (
-                  <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-center space-y-2">
-                    <p className="text-slate-400 font-bold uppercase">Thanh toán trực tiếp tại cổng ra</p>
-                    <p className="text-slate-550">Bạn vui lòng di chuyển xe đến chốt cổng ra, nhân viên trực cổng sẽ thực hiện thu tiền mặt và hoàn tất phiên đỗ của bạn.</p>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => checkoutMutation.mutate({ sessionId: currentSession.sessionId, amount: currentSession.estimatedFee || 0 })}
-                disabled={checkoutMutation.isPending}
-                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-md disabled:opacity-50 text-xs"
-              >
-                {checkoutMutation.isPending ? 'Đang tạo phiên giao dịch...' : 'Xác Nhận Phương Thức & Tiến Hành'}
-              </button>
+              )}
             </div>
+
+            {/* Amount details */}
+            <div className="mb-4">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Số tiền cần chuyển</span>
+              <span className="text-xl font-black text-indigo-650 mt-1 block">
+                {Number(personalQrData.amount).toLocaleString('vi-VN')}đ
+              </span>
+            </div>
+
+            {/* Transfer Description */}
+            <div className="text-left bg-slate-50 border border-slate-200 rounded-2xl p-4.5 mb-5 relative">
+              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nội dung chuyển khoản</span>
+              <div className="flex items-center justify-between">
+                <span className="font-mono font-bold text-xs text-slate-800 break-all select-all">
+                  {personalQrData.transferDescription}
+                </span>
+                <button
+                  onClick={() => copyToClipboard(personalQrData.transferDescription)}
+                  className="text-indigo-600 hover:text-indigo-750 text-xs font-bold shrink-0 ml-3 cursor-pointer"
+                >
+                  {copiedDescription ? 'Đã sao chép!' : 'Sao chép'}
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-normal mb-5">
+              Sau khi quét mã và chuyển tiền thành công, hệ thống sẽ đối soát tự động và hoàn tất phiên đỗ của bạn trong 1-2 phút.
+            </p>
+
+            <button
+              onClick={() => {
+                setShowPersonalQrModal(false);
+                queryClient.invalidateQueries({ queryKey: ['currentSession'] });
+              }}
+              className="w-full py-2.5 bg-slate-850 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer transition active:scale-98"
+            >
+              Tôi đã chuyển khoản xong
+            </button>
           </div>
         </div>
       )}
