@@ -41,6 +41,7 @@ export const authService = {
     // Lưu thông tin người dùng và token vào localStorage
     localStorage.setItem('accessToken', data.accessToken);
     localStorage.setItem('username', data.fullName);
+    localStorage.setItem('fullName', data.fullName);
     localStorage.setItem('email', data.email);
     localStorage.setItem('role', data.role);
     
@@ -73,6 +74,7 @@ export const authService = {
   clearSession: () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('username');
+    localStorage.removeItem('fullName');
     localStorage.removeItem('email');
     localStorage.removeItem('role');
   },
