@@ -30,7 +30,10 @@ export default function Header() {
     switch (role) {
       case 'CUSTOMER':
       case 'USER':
-        return [{ label: 'Tổng quan', path: '/customer' }];
+        return [
+          { label: 'Tổng quan', path: '/customer' },
+          { label: 'Xe của tôi', path: '/customer/vehicles' },
+        ];
       case 'ADMIN':
       case 'ADMINISTRATOR':
         return [{ label: 'Tổng quan', path: '/admin' }];
