@@ -26,6 +26,11 @@ export const adminService = {
     return response.data;
   },
 
+  updateUserPut: async (id: number, payload: any): Promise<UserView> => {
+    const response = await api.put<UserView>(`/api/admin/users/${id}`, payload);
+    return response.data;
+  },
+
   deleteUser: async (id: number): Promise<void> => {
     await api.delete(`/api/admin/users/${id}`);
   },
