@@ -53,7 +53,7 @@ export default function AdminUsers() {
 
   const updateUserMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: any }) =>
-      adminService.updateUserPut(id, payload),
+      adminService.updateUser(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['adminUsersList'] });
       showToast('Cập nhật tài khoản thành công!', 'success');

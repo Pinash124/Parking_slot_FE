@@ -88,7 +88,8 @@ export default function StaffCheckIn() {
 
   // Mutation for check-in
   const checkInMutation = useMutation({
-    mutationFn: (payload: any) => parkingService.checkIn(payload),
+    mutationFn: ({ gateCode, payload }: { gateCode: string; payload: any }) => 
+      parkingService.staffCheckIn(gateCode, payload),
     onSuccess: (data) => {
       refetchSlots();
       setCreatedSession(data);
@@ -147,12 +148,13 @@ export default function StaffCheckIn() {
     if (!isValid) return;
 
     checkInMutation.mutate({
-      vehicleId: vehicleId ? parseInt(vehicleId, 10) : undefined,
-      licensePlate: licensePlate.trim().toUpperCase() || undefined,
-      slotId: selectedSlotId,
-      ticketCode: ticketCode.trim() || undefined,
-      entryGateId: entryGateCode === 'GATE_IN_01' ? 1 : 2, // Map to Gate ID
-      reservationId: reservationId || undefined,
+      gateCode: entryGateCode,
+      payload: {
+        vehicleId: vehicleId ? parseInt(vehicleId, 10) : undefined,
+        licensePlate: licensePlate.trim().toUpperCase() || undefined,
+        slotId: selectedSlotId,
+        reservationId: reservationId || undefined,
+      },
     });
   };
 
