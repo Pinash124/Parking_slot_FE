@@ -1,11 +1,16 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import Header from '../components/Header';
+import QrScannerModal from '../components/QrScannerModal';
 import { parkingService } from '../services/parkingService';
 
 export default function StaffCheckOut() {
   // Custom Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Scanner State
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+  const [scannerTarget, setScannerTarget] = useState<'checkout' | 'exit'>('checkout');
 
   // --- STATE FOR CHECKOUT PREP ---
   const [prepPlate, setPrepPlate] = useState('');
@@ -20,6 +25,17 @@ export default function StaffCheckOut() {
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleQrScanSuccess = (decodedText: string) => {
+    const cleanText = decodedText.toUpperCase();
+    if (scannerTarget === 'checkout') {
+      setPrepPlate(cleanText);
+      prepareCheckoutMutation.mutate({ licensePlate: cleanText });
+    } else {
+      setValPlate(cleanText);
+      validateExitMutation.mutate({ licensePlate: cleanText });
+    }
   };
 
   // Mutations
@@ -132,7 +148,7 @@ export default function StaffCheckOut() {
                 <label htmlFor="prepPlate" className="block text-[10px] font-bold uppercase text-slate-450 mb-1.5">
                   Nhập biển số xe xuất bến
                 </label>
-                <div className="flex space-x-2">
+                 <div className="flex space-x-2">
                   <input
                     id="prepPlate"
                     type="text"
@@ -141,6 +157,20 @@ export default function StaffCheckOut() {
                     placeholder="Ví dụ: 29A-111.22"
                     className="flex-1 bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-xs font-bold uppercase focus:outline-none"
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScannerTarget('checkout');
+                      setIsQrScannerOpen(true);
+                    }}
+                    className="px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition flex items-center space-x-1"
+                  >
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Quét QR</span>
+                  </button>
                   <button
                     type="submit"
                     disabled={prepareCheckoutMutation.isPending}
@@ -234,6 +264,20 @@ export default function StaffCheckOut() {
                     placeholder="Ví dụ: 30A-999.88"
                     className="flex-1 bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-xs font-bold uppercase focus:outline-none"
                   />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScannerTarget('exit');
+                      setIsQrScannerOpen(true);
+                    }}
+                    className="px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition flex items-center space-x-1"
+                  >
+                    <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span>Quét QR</span>
+                  </button>
                   <button
                     type="submit"
                     disabled={validateExitMutation.isPending}
@@ -354,6 +398,12 @@ export default function StaffCheckOut() {
           <span className="text-xs font-bold tracking-tight">{toast.message}</span>
         </div>
       )}
+      <QrScannerModal
+        isOpen={isQrScannerOpen}
+        onClose={() => setIsQrScannerOpen(false)}
+        onScanSuccess={handleQrScanSuccess}
+        title={scannerTarget === 'checkout' ? 'Quét QR thanh toán cước' : 'Quét QR kiểm tra Barie lối ra'}
+      />
     </div>
   );
 }

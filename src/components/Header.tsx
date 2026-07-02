@@ -34,6 +34,7 @@ export default function Header() {
           { label: 'Tổng quan', path: '/customer' },
           { label: 'Xe của tôi', path: '/customer/vehicles' },
           { label: 'Đặt chỗ trước', path: '/customer/reservations' },
+          { label: 'Vé tháng', path: '/customer/monthly-passes' },
         ];
       case 'ADMIN':
       case 'ADMINISTRATOR':

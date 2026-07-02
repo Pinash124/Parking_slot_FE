@@ -109,4 +109,14 @@ export const userPortalService = {
     const response = await api.get<{ success: boolean; amount: number; message?: string; transactionId?: string; exitDeadline?: string | null }>(`/api/payment-gateways/vnpay/return?${queryString}`);
     return response.data;
   },
+
+  monthlyPasses: async (): Promise<any[]> => {
+    const response = await api.get<any[]>('/api/user/monthly-passes');
+    return response.data;
+  },
+
+  registerMonthlyPass: async (payload: { vehicleId: number; startDate: string; months: number; note: string }): Promise<any> => {
+    const response = await api.post<any>('/api/user/monthly-passes', payload);
+    return response.data;
+  },
 };
