@@ -42,12 +42,12 @@ export default function ManagerDashboard() {
           </p>
         </div>
 
-        <div className="bg-slate-900 p-6 rounded-xl">
-          <h3>Revenue Today</h3>
-          <p className="text-4xl font-bold text-indigo-400">
-            {data?.todayRevenue.toLocaleString()} VND
-          </p>
-        </div>
+          <div className="bg-slate-900 p-6 rounded-xl">
+            <h3>Revenue Today</h3>
+            <p className="text-4xl font-bold text-indigo-400">
+            {Number(data?.todayRevenue ?? 0).toLocaleString()} VND
+            </p>
+          </div>
 
       </div>
 

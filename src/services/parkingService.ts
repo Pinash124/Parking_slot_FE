@@ -2,6 +2,7 @@ import api from './api';
 import type {
   PageResponse,
   DashboardOverviewResponse,
+  RevenueTrendResponse,
   ReservationCreateRequest,
   ReservationResponse,
   SessionCheckInRequest,
@@ -21,6 +22,20 @@ export const parkingService = {
   // 1. Dashboard Overview
   getOverview: async (): Promise<DashboardOverviewResponse> => {
     const response = await api.get<DashboardOverviewResponse>('/api/dashboard/overview');
+    return response.data;
+  },
+
+  getDailyRevenueTrend: async (days = 14): Promise<RevenueTrendResponse> => {
+    const response = await api.get<RevenueTrendResponse>('/api/dashboard/revenue/daily', {
+      params: { days }
+    });
+    return response.data;
+  },
+
+  getMonthlyRevenueTrend: async (months = 12): Promise<RevenueTrendResponse> => {
+    const response = await api.get<RevenueTrendResponse>('/api/dashboard/revenue/monthly', {
+      params: { months }
+    });
     return response.data;
   },
 

@@ -20,6 +20,18 @@ export default function Dashboard() {
     refetchInterval: 15000,
   });
 
+  const { data: dailyRevenueTrend } = useQuery({
+    queryKey: ['dashboardRevenueTrend', 'daily', 14],
+    queryFn: () => parkingService.getDailyRevenueTrend(14),
+    refetchInterval: 60000,
+  });
+
+  const { data: monthlyRevenueTrend } = useQuery({
+    queryKey: ['dashboardRevenueTrend', 'monthly', 12],
+    queryFn: () => parkingService.getMonthlyRevenueTrend(12),
+    refetchInterval: 300000,
+  });
+
   const logoutMutation = useMutation({
     mutationFn: authService.logout,
     onSuccess: () => {
@@ -42,10 +54,15 @@ export default function Dashboard() {
     pendingPayments: 2,
     completedPayments: 18,
     todayRevenue: 285000,
+    monthRevenue: 1245000,
     totalTransactions: 20
   };
 
   const displayStats = stats || mockStats;
+  const dailyRevenuePoints = dailyRevenueTrend?.points || [];
+  const monthlyRevenuePoints = monthlyRevenueTrend?.points || [];
+  const maxDailyRevenue = Math.max(1, ...dailyRevenuePoints.map((point) => Number(point.revenue) || 0));
+  const maxMonthlyRevenue = Math.max(1, ...monthlyRevenuePoints.map((point) => Number(point.revenue) || 0));
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased">
@@ -117,7 +134,7 @@ export default function Dashboard() {
         )}
 
         {/* Overview Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 sm:gap-6 mb-8">
           {/* Card 1: Slot Occupancy */}
           <div className="bg-slate-900/40 border border-slate-800/80 p-5 rounded-2xl shadow-lg relative overflow-hidden">
             <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider block">Parking Slots</span>
@@ -169,6 +186,134 @@ export default function Dashboard() {
             <p className="text-slate-400 text-xs mt-2">
               From {displayStats.completedPayments} paid tickets
             </p>
+          </div>
+
+          {/* Card 5: Monthly Revenue */}
+          <div className="bg-slate-900/40 border border-slate-800/80 p-5 rounded-2xl shadow-lg bg-gradient-to-br from-emerald-950/20 to-slate-900/40">
+            <span className="text-slate-400 text-xs font-semibold uppercase tracking-wider block">This Month</span>
+            <div className="flex items-baseline space-x-1 mt-4">
+              <span className="text-2xl font-bold text-cyan-400">
+                {Number(displayStats.monthRevenue ?? 0).toLocaleString()}
+              </span>
+              <span className="text-slate-400 text-sm font-semibold">VND</span>
+            </div>
+            <p className="text-slate-400 text-xs mt-2">
+              Revenue from completed payments this month
+            </p>
+          </div>
+        </div>
+
+        {/* Revenue Charts */}
+        <div className="bg-slate-900/30 border border-slate-850 p-6 rounded-2xl shadow-xl mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-white">Revenue trends</h3>
+              <p className="text-slate-400 text-sm">
+                Daily and monthly revenue from completed payments
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-right">
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-wider text-slate-500">Today</p>
+                <p className="text-lg font-bold text-emerald-400">
+                  {Number(displayStats.todayRevenue).toLocaleString()} VND
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-wider text-slate-500">This month</p>
+                <p className="text-lg font-bold text-cyan-400">
+                  {Number(displayStats.monthRevenue ?? 0).toLocaleString()} VND
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="font-semibold text-white">Daily chart</h4>
+                  <p className="text-xs text-slate-500">Last 14 days</p>
+                </div>
+                <span className="text-xs text-slate-400">
+                  {dailyRevenueTrend?.period || 'DAILY'}
+                </span>
+              </div>
+              {dailyRevenuePoints.length === 0 ? (
+                <div className="h-56 rounded-xl border border-dashed border-slate-800 flex items-center justify-center text-slate-500 text-sm">
+                  Waiting for revenue data
+                </div>
+              ) : (
+                <div className="overflow-x-auto pb-2">
+                  <div
+                    className="grid gap-3 min-w-[720px] h-56 items-end"
+                    style={{ gridTemplateColumns: `repeat(${dailyRevenuePoints.length}, minmax(0, 1fr))` }}
+                  >
+                    {dailyRevenuePoints.map((point) => {
+                      const height = Math.max((Number(point.revenue) || 0) / maxDailyRevenue * 100, 6);
+                      return (
+                        <div key={point.key} className="flex flex-col items-center justify-end h-full gap-2">
+                          <div className="w-full flex-1 flex items-end justify-center">
+                            <div
+                              className="w-full max-w-[28px] rounded-t-xl bg-gradient-to-t from-indigo-600 via-cyan-500 to-emerald-400 shadow-[0_0_18px_rgba(34,197,94,0.25)]"
+                              style={{ height: `${height}%` }}
+                              title={`${point.label}: ${Number(point.revenue).toLocaleString()} VND`}
+                            />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[11px] text-slate-400">{point.label}</p>
+                            <p className="text-[10px] text-slate-600">{Number(point.revenue).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950/40 p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="font-semibold text-white">Monthly chart</h4>
+                  <p className="text-xs text-slate-500">Last 12 months</p>
+                </div>
+                <span className="text-xs text-slate-400">
+                  {monthlyRevenueTrend?.period || 'MONTHLY'}
+                </span>
+              </div>
+              {monthlyRevenuePoints.length === 0 ? (
+                <div className="h-56 rounded-xl border border-dashed border-slate-800 flex items-center justify-center text-slate-500 text-sm">
+                  Waiting for revenue data
+                </div>
+              ) : (
+                <div className="overflow-x-auto pb-2">
+                  <div
+                    className="grid gap-3 min-w-[720px] h-56 items-end"
+                    style={{ gridTemplateColumns: `repeat(${monthlyRevenuePoints.length}, minmax(0, 1fr))` }}
+                  >
+                    {monthlyRevenuePoints.map((point) => {
+                      const height = Math.max((Number(point.revenue) || 0) / maxMonthlyRevenue * 100, 6);
+                      return (
+                        <div key={point.key} className="flex flex-col items-center justify-end h-full gap-2">
+                          <div className="w-full flex-1 flex items-end justify-center">
+                            <div
+                              className="w-full max-w-[28px] rounded-t-xl bg-gradient-to-t from-cyan-600 via-sky-500 to-indigo-400 shadow-[0_0_18px_rgba(59,130,246,0.25)]"
+                              style={{ height: `${height}%` }}
+                              title={`${point.label}: ${Number(point.revenue).toLocaleString()} VND`}
+                            />
+                          </div>
+                          <div className="text-center">
+                            <p className="text-[11px] text-slate-400">{point.label}</p>
+                            <p className="text-[10px] text-slate-600">{Number(point.revenue).toLocaleString()}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

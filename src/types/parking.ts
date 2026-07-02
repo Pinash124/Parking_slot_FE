@@ -60,7 +60,22 @@ export interface DashboardOverviewResponse {
   pendingPayments: number;
   completedPayments: number;
   todayRevenue: number;
+  monthRevenue: number;
   totalTransactions: number;
+}
+
+export interface RevenueTrendPoint {
+  key: string;
+  label: string;
+  revenue: number;
+  payments: number;
+}
+
+export interface RevenueTrendResponse {
+  period: 'DAILY' | 'MONTHLY' | string;
+  startDate: string;
+  endDate: string;
+  points: RevenueTrendPoint[];
 }
 
 // Reservation DTOs
