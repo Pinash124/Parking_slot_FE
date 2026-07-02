@@ -11,6 +11,7 @@ import LandingPage from './pages/LandingPage';
 import DriverDashboard from './pages/DriverDashboard';
 import MyVehicles from './pages/MyVehicles';
 import MyReservations from './pages/MyReservations';
+import MyMonthlyPasses from './pages/MyMonthlyPasses';
 import PaymentReturn from './pages/PaymentReturn';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
@@ -99,6 +100,7 @@ export default function App() {
                     <Route path="/" element={<DriverDashboard />} />
                     <Route path="/vehicles" element={<MyVehicles />} />
                     <Route path="/reservations" element={<MyReservations />} />
+                    <Route path="/monthly-passes" element={<MyMonthlyPasses />} />
                     <Route path="/payment-return" element={<PaymentReturn />} />
                     <Route path="/change-password" element={<ChangePassword />} />
                     <Route path="*" element={<Navigate to="/customer" replace />} />
