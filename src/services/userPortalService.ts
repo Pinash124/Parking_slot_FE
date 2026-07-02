@@ -88,12 +88,15 @@ export const userPortalService = {
 
   // ========== USER PORTAL NEW PAYMENTS & SERVICES ==========
   getUserPortalCurrentSession: async (): Promise<CurrentParkingSessionResponse> => {
-    const response = await api.get<CurrentParkingSessionResponse>('/api/user-portal/current');
+    const response = await api.get<CurrentParkingSessionResponse>('/api/user/parking-sessions/current');
     return response.data;
   },
 
   addUserPortalService: async (payload: { sessionId: number; serviceId: number }): Promise<CurrentParkingSessionResponse> => {
-    const response = await api.post<CurrentParkingSessionResponse>('/api/user-portal/add-service', payload);
+    const response = await api.post<CurrentParkingSessionResponse>(
+      `/api/user/parking-sessions/${payload.sessionId}/additional-services`,
+      { serviceId: payload.serviceId }
+    );
     return response.data;
   },
 

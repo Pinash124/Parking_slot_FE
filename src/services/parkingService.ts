@@ -402,71 +402,71 @@ export const parkingService = {
   },
 
   getManagementBuildings: async (): Promise<BuildingView[]> => {
-    const response = await api.get<BuildingView[]>('/api/management/buildings');
+    const response = await api.get<BuildingView[]>('/api/manager/buildings');
     return response.data;
   },
 
   createManagementBuilding: async (payload: BuildingRequest): Promise<BuildingView> => {
-    const response = await api.post<BuildingView>('/api/management/buildings', payload);
+    const response = await api.post<BuildingView>('/api/manager/buildings', payload);
     return response.data;
   },
 
   deleteManagementBuilding: async (id: number): Promise<void> => {
-    await api.delete(`/api/management/buildings/${id}`);
+    await api.delete(`/api/manager/buildings/${id}`);
   },
 
   getManagementFloors: async (buildingId?: number): Promise<FloorView[]> => {
-    const response = await api.get<FloorView[]>('/api/management/floors', {
+    const response = await api.get<FloorView[]>('/api/manager/floors', {
       params: buildingId ? { buildingId } : undefined,
     });
     return response.data;
   },
 
   createManagementFloor: async (payload: FloorRequest): Promise<FloorView> => {
-    const response = await api.post<FloorView>('/api/management/floors', payload);
+    const response = await api.post<FloorView>('/api/manager/floors', payload);
     return response.data;
   },
 
   deleteManagementFloor: async (id: number): Promise<void> => {
-    await api.delete(`/api/management/floors/${id}`);
+    await api.delete(`/api/manager/floors/${id}`);
   },
 
   getManagementZonesAllowed: async (): Promise<ZoneView[]> => {
-    const response = await api.get<ZoneView[]>('/api/management/zones');
+    const response = await api.get<ZoneView[]>('/api/manager/zones');
     return response.data;
   },
 
   createManagementZone: async (payload: ZoneRequest): Promise<ZoneView> => {
-    const response = await api.post<ZoneView>('/api/management/zones', payload);
+    const response = await api.post<ZoneView>('/api/manager/zones', payload);
     return response.data;
   },
 
   deleteManagementZone: async (id: number): Promise<void> => {
-    await api.delete(`/api/management/zones/${id}`);
+    await api.delete(`/api/manager/zones/${id}`);
   },
 
   getManagementSlotsList: async (): Promise<SlotView[]> => {
-    const response = await api.get<SlotView[]>('/api/management/slots');
+    const response = await api.get<SlotView[]>('/api/manager/slots');
     return response.data;
   },
 
   patchManagementSlotStatus: async (id: number, status: string): Promise<SlotView> => {
-    const response = await api.patch<SlotView>(`/api/management/slots/${id}/status`, { status });
+    const response = await api.patch<SlotView>(`/api/manager/slots/${id}/status?status=${encodeURIComponent(status)}`);
     return response.data;
   },
 
   // ========== ADMIN - PRICING POLICIES NEW ENDPOINTS ==========
   getManagementPolicies: async (): Promise<any[]> => {
-    const response = await api.get<any[]>('/api/management/policies');
+    const response = await api.get<any[]>('/api/manager/pricing-policies');
     return response.data;
   },
 
   createManagementPolicy: async (payload: any): Promise<any> => {
-    const response = await api.post<any>('/api/management/policies', payload);
+    const response = await api.post<any>('/api/manager/pricing-policies', payload);
     return response.data;
   },
 
   deleteManagementPolicy: async (id: number): Promise<void> => {
-    await api.delete(`/api/management/policies/${id}`);
+    await api.delete(`/api/manager/pricing-policies/${id}`);
   },
 };
