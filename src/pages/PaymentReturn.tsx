@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import { userPortalService } from '../services/userPortalService';
 
 export default function PaymentReturn() {
   const location = useLocation();
+  const queryClient = useQueryClient();
   const queryString = location.search.substring(1); // Get raw query string without '?'
 
   // Fetch / verify payment status with backend
@@ -21,6 +22,12 @@ export default function PaymentReturn() {
 
   useEffect(() => {
     if (result?.success) {
+      // Invalidate queries to prevent stale data
+      queryClient.invalidateQueries({ queryKey: ['currentSession'] });
+      queryClient.invalidateQueries({ queryKey: ['userPortalVehicles'] });
+      queryClient.invalidateQueries({ queryKey: ['reservationsList'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
+
       // Calculate target time: if exitDeadline is provided, use it, otherwise default to 15 minutes from now
       const targetTime = result.exitDeadline 
         ? new Date(result.exitDeadline).getTime() 

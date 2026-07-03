@@ -116,6 +116,16 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       addToast('Gặp lỗi giao thức kết nối thời gian thực.', 'error');
     };
 
+    stompClient.onWebSocketClose = () => {
+      setIsConnected(false);
+      console.log('WebSocket connection closed');
+    };
+
+    stompClient.onWebSocketError = (error) => {
+      setIsConnected(false);
+      console.error('WebSocket connection error:', error);
+    };
+
     stompClient.activate();
     stompClientRef.current = stompClient;
 

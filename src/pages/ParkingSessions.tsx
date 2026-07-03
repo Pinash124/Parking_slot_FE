@@ -236,12 +236,13 @@ export default function ParkingSessions() {
                 <button
                   type="button"
                   onClick={() => setIsQrScannerOpen(true)}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center space-x-2"
+                  disabled={checkInMutation.isPending || checkOutMutation.isPending}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition transform hover:-translate-y-0.5 cursor-pointer flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 20h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  <span>Bắt đầu quét Camera QR / Biển số</span>
+                  <span>{checkInMutation.isPending || checkOutMutation.isPending ? 'Đang xử lý...' : 'Bắt đầu quét Camera QR / Biển số'}</span>
                 </button>
 
                 <div className="relative flex items-center justify-center my-2">
@@ -261,14 +262,16 @@ export default function ParkingSessions() {
                     type="text"
                     value={gateQuery}
                     onChange={(e) => setGateQuery(e.target.value)}
+                    disabled={checkInMutation.isPending || checkOutMutation.isPending}
                     placeholder="Mã vé hoặc Biển số xe..."
-                    className="flex-1 bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs focus:outline-none uppercase font-bold text-center tracking-wider text-slate-800"
+                    className="flex-1 bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs focus:outline-none uppercase font-bold text-center tracking-wider text-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <button
                     type="submit"
-                    className="px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer"
+                    disabled={checkInMutation.isPending || checkOutMutation.isPending}
+                    className="px-4 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Kiểm tra
+                    {checkInMutation.isPending || checkOutMutation.isPending ? 'Đang xử lý...' : 'Kiểm tra'}
                   </button>
                 </form>
               </div>
