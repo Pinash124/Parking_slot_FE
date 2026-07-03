@@ -32,7 +32,7 @@ export default function DriverDashboard() {
   // Load pricing policies for rates view
   const { data: pricingPolicies = [] } = useQuery({
     queryKey: ['pricingPolicies'],
-    queryFn: () => parkingService.getPricingPolicies(),
+    queryFn: () => userPortalService.getPricingPolicies(),
   });
 
   // Current active session query pointing to user-portal endpoint
@@ -280,7 +280,7 @@ export default function DriverDashboard() {
           <button
             onClick={() => setActiveTab('ticket')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap relative cursor-pointer ${
-              activeTab === 'ticket' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
+              activeTab === 'ticket' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             Lượt đỗ xe hiện tại (Vé xe)
@@ -292,7 +292,7 @@ export default function DriverDashboard() {
           <button
             onClick={() => setActiveTab('info')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'info' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
+              activeTab === 'info' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             Bãi Xe & Bảng Giá
@@ -301,7 +301,7 @@ export default function DriverDashboard() {
           <button
             onClick={() => setActiveTab('booking')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'booking' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
+              activeTab === 'booking' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             Đặt Chỗ Trước
@@ -310,7 +310,7 @@ export default function DriverDashboard() {
           <button
             onClick={() => setActiveTab('feedback')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'feedback' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:text-slate-805'
+              activeTab === 'feedback' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             Gửi Phản Hồi
@@ -334,10 +334,10 @@ export default function DriverDashboard() {
                   </p>
                 </div>
 
-                <div className="pt-2 flex flex-col space-y-3.5">
+                <div className="pt-2 flex flex-col space-y-3.5 w-full">
                   <Link
                     to="/customer/reservations"
-                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-550 active:scale-98 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer inline-block"
+                    className="w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 active:scale-98 text-white rounded-2xl text-xs font-extrabold transition shadow-md shadow-indigo-600/10 cursor-pointer inline-block text-center"
                   >
                     Đặt lịch giữ chỗ đỗ xe &rarr;
                   </Link>
@@ -388,10 +388,19 @@ export default function DriverDashboard() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 {/* Session Card Info */}
                 <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-                  <div className="bg-slate-50/50 p-6 border-b border-dashed border-slate-200 text-center relative">
+                  <div className="bg-slate-50/50 p-6 border-b border-dashed border-slate-200 text-center relative flex flex-col items-center justify-center">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vé Xe Điện Tử</p>
-                    <h4 className="text-2xl font-black text-indigo-650 mt-1">{currentSession.ticketCode}</h4>
+                    <h4 className="text-2xl font-black text-indigo-600 mt-1">{currentSession.ticketCode}</h4>
                     <p className="text-[10px] text-slate-450 mt-0.5">Trạng thái: <span className="font-extrabold uppercase text-indigo-600">{currentSession.status}</span></p>
+                    {currentSession.licensePlate && (
+                      <div className="mt-4 bg-white border border-slate-200 p-2.5 rounded-2xl shadow-sm w-32 h-32 flex items-center justify-center animate-in zoom-in-95 duration-200">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(currentSession.licensePlate)}`}
+                          alt="Vehicle QR Ticket"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-6 space-y-5 text-xs font-medium">
@@ -458,7 +467,7 @@ export default function DriverDashboard() {
                         <button
                           type="submit"
                           disabled={addServiceMutation.isPending}
-                          className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 border border-indigo-100 rounded-xl text-xs font-bold cursor-pointer transition self-end disabled:opacity-50"
+                          className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 rounded-xl text-xs font-bold cursor-pointer transition self-end disabled:opacity-50"
                         >
                           {addServiceMutation.isPending ? 'Đang thêm...' : '+ Thêm'}
                         </button>
@@ -467,7 +476,7 @@ export default function DriverDashboard() {
 
                     <div className="flex justify-between items-center pt-3 border-t border-slate-100">
                       <span className="text-slate-500 font-bold text-sm">Tổng phí tạm tính:</span>
-                      <span className="text-2xl font-black text-indigo-650">{(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ</span>
+                      <span className="text-2xl font-black text-indigo-600">{(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ</span>
                     </div>
                   </div>
                 </div>
@@ -489,10 +498,12 @@ export default function DriverDashboard() {
                       {/* Exit QR for safety backup */}
                       <div className="bg-slate-50 border border-slate-200 p-4.5 rounded-2xl inline-block w-full">
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">QR quét cổng ra dự phòng</p>
-                        <div className="w-28 h-28 bg-white border border-slate-200 rounded-lg flex items-center justify-center p-1.5 mx-auto">
-                          <svg className="w-full h-full text-slate-800" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M2 2h6v6H2V2zm1.5 1.5v3h3v-3h-3zM2 16h6v6H2v-6zm1.5 1.5v3h3v-3h-3zM16 2h6v6h-6V2zm1.5 1.5v3h3v-3h-3zM12 2h2v2h-2V2zm0 4h2v2h-2V6zm2-2h2v2h-2V4zm-2 6h2v2h-2v-2zm4 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm6-4h2v2h-2v-2zm0 4h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2zm-6 2h2v2h-2v-2zm6 0h2v2h-2v-2zm-4 4h2v2h-2v-2zm4 0h2v2h-2v-2z" />
-                          </svg>
+                        <div className="w-28 h-28 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-1 mx-auto shadow-sm animate-in zoom-in-95 duration-200">
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(currentSession.licensePlate || '')}`}
+                            alt="Exit QR Code"
+                            className="w-full h-full object-contain"
+                          />
                         </div>
                       </div>
                     </div>
@@ -507,11 +518,11 @@ export default function DriverDashboard() {
                         disabled={checkoutMutation.isPending}
                         className="w-full text-left p-4.5 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/5 transition cursor-pointer flex items-start space-x-3 group"
                       >
-                        <div className="w-10 h-10 bg-indigo-50 group-hover:bg-indigo-100 rounded-xl flex items-center justify-center font-black text-indigo-650 shrink-0 text-sm">
+                        <div className="w-10 h-10 bg-indigo-50 group-hover:bg-indigo-100 rounded-xl flex items-center justify-center font-black text-indigo-600 shrink-0 text-sm">
                           VN
                         </div>
                         <div>
-                          <span className="font-extrabold text-slate-800 text-xs block group-hover:text-indigo-650 transition">Cổng VNPAY Gateway</span>
+                          <span className="font-extrabold text-slate-800 text-xs block group-hover:text-indigo-600 transition">Cổng VNPAY Gateway</span>
                           <span className="text-[9px] text-slate-450 mt-0.5 block leading-normal">Thanh toán qua ví điện tử, thẻ ATM nội địa, hoặc thẻ quốc tế Visa/MasterCard.</span>
                         </div>
                       </button>
@@ -543,7 +554,7 @@ export default function DriverDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-150 pb-3 flex items-center">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex items-center">
                   <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2"></span>
                   Thời Gian Hoạt Động & Xe Hỗ Trợ
                 </h3>
@@ -576,7 +587,7 @@ export default function DriverDashboard() {
 
               {/* Pricing table */}
               <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-150 pb-3 flex items-center">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex items-center">
                   <span className="w-2.5 h-2.5 bg-purple-600 rounded-full mr-2"></span>
                   Bảng Giá Gửi Xe Hiện Tại
                 </h3>
@@ -594,8 +605,8 @@ export default function DriverDashboard() {
                       {pricingPolicies.map((policy) => (
                         <tr key={policy.id} className="hover:bg-slate-50/50 transition">
                           <td className="py-3.5 pr-4 text-slate-900 font-bold">{policy.vehicleTypeName || 'N/A'}</td>
-                          <td className="py-3.5 px-4 text-right text-indigo-650">{(policy.hourlyRate ?? 0).toLocaleString()}đ</td>
-                          <td className="py-3.5 px-4 text-right text-indigo-650">{(policy.dailyRate ?? 0).toLocaleString()}đ</td>
+                          <td className="py-3.5 px-4 text-right text-indigo-600">{(policy.hourlyRate ?? 0).toLocaleString()}đ</td>
+                          <td className="py-3.5 px-4 text-right text-indigo-600">{(policy.dailyRate ?? 0).toLocaleString()}đ</td>
                           <td className="py-3.5 pl-4 text-right text-rose-600">{(policy.lostTicketFee ?? 0).toLocaleString()}đ</td>
                         </tr>
                       ))}
@@ -648,7 +659,7 @@ export default function DriverDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
               <h3 className="text-base font-bold text-slate-800 pb-3 border-b border-slate-100 flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 bg-indigo-650 rounded-full"></span>
+                <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full"></span>
                 <span>Đặt Chỗ Trước (Booking)</span>
               </h3>
 
@@ -712,7 +723,7 @@ export default function DriverDashboard() {
                 <button
                   type="submit"
                   disabled={bookingMutation.isPending}
-                  className="w-full py-2.5 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm"
+                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm"
                 >
                   {bookingMutation.isPending ? 'Đang đăng ký...' : 'Xác Nhận Đăng Ký Đặt Lịch'}
                 </button>
@@ -733,7 +744,7 @@ export default function DriverDashboard() {
                     const statusClass = 
                       booking.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                       booking.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                      'bg-slate-50 text-slate-500 border-slate-150';
+                      'bg-slate-50 text-slate-500 border-slate-200';
 
                     return (
                       <div 
@@ -854,7 +865,7 @@ export default function DriverDashboard() {
             {/* Amount details */}
             <div className="mb-4">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Số tiền cần chuyển</span>
-              <span className="text-xl font-black text-indigo-650 mt-1 block">
+              <span className="text-xl font-black text-indigo-600 mt-1 block">
                 {Number(personalQrData.amount).toLocaleString('vi-VN')}đ
               </span>
             </div>
@@ -868,7 +879,7 @@ export default function DriverDashboard() {
                 </span>
                 <button
                   onClick={() => copyToClipboard(personalQrData.transferDescription)}
-                  className="text-indigo-600 hover:text-indigo-750 text-xs font-bold shrink-0 ml-3 cursor-pointer"
+                  className="text-indigo-600 hover:text-indigo-700 text-xs font-bold shrink-0 ml-3 cursor-pointer"
                 >
                   {copiedDescription ? 'Đã sao chép!' : 'Sao chép'}
                 </button>

@@ -194,7 +194,7 @@ export default function AdminUsers() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="text-[10px] text-indigo-650 hover:text-indigo-800 font-bold"
+                  className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold"
                 >
                   Hủy chỉnh sửa
                 </button>
@@ -291,7 +291,7 @@ export default function AdminUsers() {
               <button
                 type="submit"
                 disabled={createUserMutation.isPending || updateUserMutation.isPending}
-                className="w-full py-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm mt-4 active:scale-98"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm mt-4 active:scale-98"
               >
                 {createUserMutation.isPending || updateUserMutation.isPending ? 'Đang gửi...' : editingId ? 'Cập Nhật Tài Khoản' : 'Tạo Tài Khoản'}
               </button>
@@ -354,7 +354,7 @@ export default function AdminUsers() {
                               <td className="py-4 pl-4 text-right space-x-2 shrink-0 whitespace-nowrap">
                                 <button
                                   onClick={() => handleEditClick(u)}
-                                  className="text-indigo-650 hover:bg-indigo-50 border border-transparent px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                                  className="text-indigo-600 hover:bg-indigo-50 border border-transparent px-2.5 py-1.5 rounded-lg transition cursor-pointer"
                                 >
                                   Sửa
                                 </button>
@@ -403,7 +403,7 @@ export default function AdminUsers() {
                       onClick={() => paginate(idx + 1)}
                       className={`w-8 h-8 rounded-xl border transition cursor-pointer ${
                         currentPage === idx + 1
-                          ? 'border-indigo-600 bg-indigo-50 text-indigo-650 font-extrabold'
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-600 font-extrabold'
                           : 'border-slate-200 hover:bg-slate-50 text-slate-500'
                       }`}
                     >

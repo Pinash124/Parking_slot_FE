@@ -190,7 +190,7 @@ export default function ManagerDashboard() {
             <p className="text-slate-400 text-sm mt-0.5">Quản lý bãi xe, phân khu, ô đỗ, biểu phí và theo dõi sự cố vận hành.</p>
           </div>
           <div className="bg-white border border-slate-200 px-4 py-2 rounded-2xl text-xs font-bold text-slate-650 flex items-center space-x-2.5">
-            <span className="w-2.5 h-2.5 bg-indigo-650 rounded-full animate-pulse"></span>
+            <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-pulse"></span>
             <span>Doanh thu hôm nay: <strong>{(stats?.todayRevenue ?? 0).toLocaleString('vi-VN')}đ</strong></span>
           </div>
         </div>
@@ -200,7 +200,7 @@ export default function ManagerDashboard() {
           <button
             onClick={() => setActiveSubTab('parking')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'parking' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:bg-slate-100'
+              activeSubTab === 'parking' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
             }`}
           >
             Bãi Xe & Khu Vực
@@ -208,7 +208,7 @@ export default function ManagerDashboard() {
           <button
             onClick={() => setActiveSubTab('vehicles')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'vehicles' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:bg-slate-100'
+              activeSubTab === 'vehicles' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
             }`}
           >
             Loại Phương Tiện
@@ -216,7 +216,7 @@ export default function ManagerDashboard() {
           <button
             onClick={() => setActiveSubTab('slots')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'slots' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:bg-slate-100'
+              activeSubTab === 'slots' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
             }`}
           >
             Quản Lý Slot Đỗ
@@ -224,7 +224,7 @@ export default function ManagerDashboard() {
           <button
             onClick={() => setActiveSubTab('rates')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'rates' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:bg-slate-100'
+              activeSubTab === 'rates' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
             }`}
           >
             Bảng Giá Gửi Xe
@@ -232,7 +232,7 @@ export default function ManagerDashboard() {
           <button
             onClick={() => setActiveSubTab('reports')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'reports' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:bg-slate-100'
+              activeSubTab === 'reports' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
             }`}
           >
             Báo Cáo Thống Kê
@@ -240,7 +240,7 @@ export default function ManagerDashboard() {
           <button
             onClick={() => setActiveSubTab('exceptions')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer relative ${
-              activeSubTab === 'exceptions' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:bg-slate-100'
+              activeSubTab === 'exceptions' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
             }`}
           >
             Xử Lý Sự Cố
@@ -253,7 +253,7 @@ export default function ManagerDashboard() {
           <button
             onClick={() => setActiveSubTab('feedbacks')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
-              activeSubTab === 'feedbacks' ? 'bg-indigo-50 text-indigo-650' : 'text-slate-500 hover:bg-slate-100'
+              activeSubTab === 'feedbacks' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
             }`}
           >
             Ý Kiến Phản Hồi
@@ -298,7 +298,7 @@ export default function ManagerDashboard() {
                   <select
                     value={newZoneTypeId}
                     onChange={(e) => setNewZoneTypeId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-805 focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none"
                     required
                   >
                     <option value="">-- Chọn Loại Xe --</option>
@@ -346,7 +346,7 @@ export default function ManagerDashboard() {
                         <td className="py-3.5 font-bold text-slate-800">{zone.zoneName}</td>
                         <td className="py-3.5 font-semibold text-slate-500">{zone.floorName || `Tầng #${zone.floorId}`}</td>
                         <td className="py-3.5 font-medium text-slate-650">{zone.vehicleTypeName || `Loại xe #${zone.vehicleTypeId}`}</td>
-                        <td className="py-3.5 text-right font-bold text-indigo-650">{zone.id ? slots.filter(s => s.zoneId === zone.id).length : 0} slots</td>
+                        <td className="py-3.5 text-right font-bold text-indigo-600">{zone.id ? slots.filter(s => s.zoneId === zone.id).length : 0} slots</td>
                       </tr>
                     ))}
                     {zones.length === 0 && (
@@ -529,7 +529,7 @@ export default function ManagerDashboard() {
               </div>
 
               {/* Status Labels Legend */}
-              <div className="flex flex-wrap gap-3 text-[10px] font-bold text-slate-500 mb-4 bg-slate-50/50 p-2.5 rounded-xl border border-slate-150">
+              <div className="flex flex-wrap gap-3 text-[10px] font-bold text-slate-500 mb-4 bg-slate-50/50 p-2.5 rounded-xl border border-slate-200">
                 <span className="flex items-center"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-md mr-1.5"></span>Trống</span>
                 <span className="flex items-center"><span className="w-2.5 h-2.5 bg-rose-500 rounded-md mr-1.5"></span>Đang sử dụng</span>
                 <span className="flex items-center"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-md mr-1.5"></span>Đã đặt trước</span>
@@ -599,7 +599,7 @@ export default function ManagerDashboard() {
         {activeSubTab === 'rates' && (
           <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-6">
             <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2.5 flex items-center">
-              <span className="w-2.5 h-2.5 bg-indigo-650 rounded-full mr-2"></span>
+              <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2"></span>
               Cấu Hình Giá Đỗ Xe & Phí Sự Cố
             </h3>
 
@@ -649,7 +649,7 @@ export default function ManagerDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm text-center">
                 <p className="text-slate-450 font-bold text-[10px] uppercase tracking-wider">Tỷ lệ lấp đầy</p>
-                <p className="text-3xl font-extrabold text-indigo-650 mt-1">
+                <p className="text-3xl font-extrabold text-indigo-600 mt-1">
                   {stats?.occupiedSlots && (stats.occupiedSlots + stats.availableSlots) > 0
                     ? Math.round((stats.occupiedSlots * 100) / (stats.occupiedSlots + stats.availableSlots))
                     : 0}%
@@ -807,7 +807,7 @@ export default function ManagerDashboard() {
             <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-3">Phản Hồi Từ Khách Hàng gửi xe</h3>
             <div className="space-y-4 pt-2">
               {feedbacks.map((fb) => (
-                <div key={fb.id} className="border border-slate-150 rounded-2xl p-4 bg-slate-50/50 space-y-2.5">
+                <div key={fb.id} className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-2.5">
                   <div className="flex justify-between items-start">
                     <div>
                       <h4 className="font-bold text-xs text-slate-800">{fb.userFullName || `Khách hàng #${fb.userId}`}</h4>
@@ -859,7 +859,7 @@ function PricingRow({ policy, onSave }: PricingRowProps) {
       <td className="py-4 font-semibold text-right">
         <input
           type="number"
-          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-20 text-center font-bold text-slate-805 focus:border-indigo-500 focus:outline-none"
+          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-20 text-center font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
           value={hourlyRate}
           onChange={(e) => setHourlyRate(parseInt(e.target.value, 10) || 0)}
         />đ
@@ -867,7 +867,7 @@ function PricingRow({ policy, onSave }: PricingRowProps) {
       <td className="py-4 font-semibold text-right">
         <input
           type="number"
-          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-24 text-center font-bold text-slate-805 focus:border-indigo-500 focus:outline-none"
+          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-24 text-center font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
           value={dailyRate}
           onChange={(e) => setDailyRate(parseInt(e.target.value, 10) || 0)}
         />đ
@@ -875,7 +875,7 @@ function PricingRow({ policy, onSave }: PricingRowProps) {
       <td className="py-4 font-semibold text-right">
         <input
           type="number"
-          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-28 text-center font-bold text-slate-805 focus:border-indigo-500 focus:outline-none"
+          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-28 text-center font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
           value={monthlyRate}
           onChange={(e) => setMonthlyRate(parseInt(e.target.value, 10) || 0)}
         />đ
@@ -883,7 +883,7 @@ function PricingRow({ policy, onSave }: PricingRowProps) {
       <td className="py-4 font-semibold text-right">
         <input
           type="number"
-          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-24 text-center font-bold text-slate-805 focus:border-indigo-500 focus:outline-none"
+          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-24 text-center font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
           value={lostTicketFee}
           onChange={(e) => setLostTicketFee(parseInt(e.target.value, 10) || 0)}
         />đ
@@ -891,7 +891,7 @@ function PricingRow({ policy, onSave }: PricingRowProps) {
       <td className="py-4 font-semibold text-right">
         <input
           type="number"
-          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-24 text-center font-bold text-slate-805 focus:border-indigo-500 focus:outline-none"
+          className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 w-24 text-center font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
           value={overtimeFee}
           onChange={(e) => setOvertimeFee(parseInt(e.target.value, 10) || 0)}
         />đ

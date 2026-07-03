@@ -203,12 +203,16 @@ export interface VehicleTypeView {
   name: string;
   description?: string;
   defaultHourlyFee?: number;
+  dailyRate?: number;
+  monthlyRate?: number;
 }
 
 export interface VehicleTypeRequest {
   name: string;
   description?: string;
   defaultHourlyFee?: number;
+  dailyRate?: number;
+  monthlyRate?: number;
 }
 
 export interface ZoneView {
@@ -375,6 +379,7 @@ export interface UserView {
   phone?: string;
   status: string;
   role: string;
+  createdAt?: string;
 }
 
 export interface AdminUserCreateRequest {

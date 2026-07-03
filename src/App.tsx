@@ -15,11 +15,7 @@ import MyMonthlyPasses from './pages/MyMonthlyPasses';
 import PaymentReturn from './pages/PaymentReturn';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
-import AdminPolicies from './pages/AdminPolicies';
-import AdminUsers from './pages/AdminUsers';
 import ParkingSessions from './pages/ParkingSessions';
-import StaffCheckIn from './pages/StaffCheckIn';
-import StaffCheckOut from './pages/StaffCheckOut';
 import GateValidator from './pages/GateValidator';
 import ParkingLogs from './pages/ParkingLogs';
 import ChangePassword from './pages/ChangePassword';
@@ -50,14 +46,22 @@ function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) {
   const role = currentUser?.role?.toUpperCase() || '';
 
   // Standardize roles check
-  const mappedRole = role === 'USER' ? 'CUSTOMER' : (role === 'ADMINISTRATOR' ? 'ADMIN' : (role === 'OPERATOR' ? 'STAFF' : role));
+  let mappedRole = role;
+  if (role.includes('CUSTOMER') || role.includes('USER')) mappedRole = 'CUSTOMER';
+  else if (role.includes('STAFF') || role.includes('OPERATOR')) mappedRole = 'STAFF';
+  else if (role.includes('MANAGER')) mappedRole = 'MANAGER';
+  else if (role.includes('ADMIN') || role.includes('ADMINISTRATOR')) mappedRole = 'ADMIN';
 
   const hasAccess = allowedRoles.some(
     (allowedRole) => {
       const standardAllowed = allowedRole.toUpperCase();
       return (
         mappedRole === standardAllowed || 
-        role === standardAllowed
+        role === standardAllowed ||
+        (standardAllowed === 'CUSTOMER' && (role.includes('CUSTOMER') || role.includes('USER'))) ||
+        (standardAllowed === 'STAFF' && (role.includes('STAFF') || role.includes('OPERATOR'))) ||
+        (standardAllowed === 'MANAGER' && role.includes('MANAGER')) ||
+        (standardAllowed === 'ADMIN' && (role.includes('ADMIN') || role.includes('ADMINISTRATOR')))
       );
     }
   );
@@ -74,7 +78,7 @@ function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) {
 function AdminOrManagerRoute() {
   const currentUser = authService.getCurrentUser();
   const role = currentUser?.role?.toUpperCase() || '';
-  if (role === 'MANAGER') {
+  if (role.includes('MANAGER')) {
     return <ManagerDashboard />;
   }
   return <AdminDashboard />;
@@ -115,9 +119,7 @@ export default function App() {
               element={
                 <ProtectedRoute allowedRoles={['STAFF', 'OPERATOR']}>
                   <Routes>
-                    <Route path="/" element={<StaffCheckIn />} />
-                    <Route path="/check-in" element={<StaffCheckIn />} />
-                    <Route path="/check-out" element={<StaffCheckOut />} />
+                    <Route path="/" element={<ParkingSessions />} />
                     <Route path="/sessions" element={<ParkingSessions />} />
                     <Route path="/gate" element={<GateValidator />} />
                     <Route path="/logs" element={<ParkingLogs />} />
@@ -136,8 +138,6 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<AdminOrManagerRoute />} />
                     <Route path="/dashboard" element={<AdminDashboard />} />
-                    <Route path="/policies" element={<AdminPolicies />} />
-                    <Route path="/users" element={<AdminUsers />} />
                     <Route path="/logs" element={<ParkingLogs />} />
                     <Route path="/sessions" element={<ParkingSessions />} />
                     <Route path="/change-password" element={<ChangePassword />} />

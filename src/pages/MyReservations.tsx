@@ -10,6 +10,9 @@ export default function MyReservations() {
   // Custom Toast state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // QR Modal State
+  const [selectedPlateForQr, setSelectedPlateForQr] = useState<string | null>(null);
+
   // Form State
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
   const [selectedBuildingId, setSelectedBuildingId] = useState('');
@@ -197,9 +200,9 @@ export default function MyReservations() {
         return 'bg-amber-50 text-amber-700 border-amber-100';
       case 'APPROVED':
       case 'CONFIRMED':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+        return 'bg-violet-50 text-violet-700 border-violet-150';
       case 'CANCELLED':
-        return 'bg-slate-50 text-slate-500 border-slate-150';
+        return 'bg-slate-50 text-slate-500 border-slate-200';
       default:
         return 'bg-blue-50 text-blue-700 border-blue-100';
     }
@@ -402,7 +405,7 @@ export default function MyReservations() {
               <button
                 type="submit"
                 disabled={bookingMutation.isPending}
-                className="w-full py-3 px-4 border border-transparent text-xs font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-550 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-indigo-600/20 mt-6"
+                className="w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 active:scale-98 text-white rounded-2xl text-xs font-extrabold transition shadow-md shadow-indigo-600/10 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer mt-6"
               >
                 {bookingMutation.isPending ? 'Đang đăng ký...' : 'Xác nhận Đặt chỗ'}
               </button>
@@ -467,16 +470,27 @@ export default function MyReservations() {
                                 {getStatusLabel(r.status)}
                               </span>
                             </td>
-                            <td className="py-4 pl-4 text-right">
-                              {isCancellable ? (
+                            <td className="py-4 pl-4 text-right space-x-2">
+                              {r.licensePlate && (r.status?.toUpperCase() === 'APPROVED' || r.status?.toUpperCase() === 'CONFIRMED') && (
                                 <button
+                                  type="button"
+                                  onClick={() => setSelectedPlateForQr(r.licensePlate)}
+                                  className="text-violet-650 hover:text-violet-700 hover:bg-violet-50 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
+                                >
+                                  Xem QR
+                                </button>
+                              )}
+                              {isCancellable && (
+                                <button
+                                  type="button"
                                   onClick={() => handleCancelBooking(r.id, code)}
                                   disabled={cancelMutation.isPending}
                                   className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer disabled:opacity-50"
                                 >
                                   Hủy đặt
                                 </button>
-                              ) : (
+                              )}
+                              {!isCancellable && (!r.licensePlate || (r.status?.toUpperCase() !== 'APPROVED' && r.status?.toUpperCase() !== 'CONFIRMED')) && (
                                 <span className="text-slate-350 text-xs italic font-normal">—</span>
                               )}
                             </td>
@@ -511,6 +525,40 @@ export default function MyReservations() {
             </svg>
           )}
           <span className="text-xs font-bold tracking-tight">{toast.message}</span>
+        </div>
+      )}
+
+      {/* QR Code Viewer Modal */}
+      {selectedPlateForQr && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="absolute inset-0 cursor-default" onClick={() => setSelectedPlateForQr(null)}></div>
+          <div className="bg-white border border-slate-200 rounded-3xl p-6.5 max-w-sm w-full shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 text-center">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <h3 className="text-base font-extrabold text-slate-800">Mã QR Đặt Chỗ</h3>
+              <button onClick={() => setSelectedPlateForQr(null)} className="text-slate-400 hover:text-slate-650 p-1.5 hover:bg-slate-100 rounded-lg transition cursor-pointer">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <p className="text-xs font-semibold text-slate-500 mb-2">Biển số xe đăng ký:</p>
+            <span className="inline-block bg-slate-100 px-4.5 py-2 rounded-2xl border border-slate-200 text-slate-850 font-black text-base tracking-wide font-mono uppercase mb-5">
+              {selectedPlateForQr}
+            </span>
+
+            <div className="w-40 h-40 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-2.5 mx-auto shadow-sm mb-4 animate-in zoom-in-95 duration-200">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(selectedPlateForQr)}`}
+                alt="Reservation QR Code"
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-relaxed max-w-xs mx-auto">
+              Vui lòng xuất trình mã QR này tại cổng bãi đỗ xe để nhân viên trực cổng quét camera và kích hoạt lượt xe vào hầm.
+            </p>
+          </div>
         </div>
       )}
     </div>

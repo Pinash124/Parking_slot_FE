@@ -167,7 +167,7 @@ export default function AdminPolicies() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="text-[10px] text-indigo-600 hover:text-indigo-750 font-bold"
+                  className="text-[10px] text-indigo-600 hover:text-indigo-700 font-bold"
                 >
                   Hủy chỉnh sửa
                 </button>
@@ -293,7 +293,7 @@ export default function AdminPolicies() {
               <button
                 type="submit"
                 disabled={savePolicyMutation.isPending}
-                className="w-full py-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm mt-4 active:scale-98"
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm mt-4 active:scale-98"
               >
                 {savePolicyMutation.isPending ? 'Đang lưu...' : editingId ? 'Cập Nhật Biểu Phí' : 'Tạo Biểu Phí Mới'}
               </button>
@@ -341,10 +341,10 @@ export default function AdminPolicies() {
                                 Loại xe ID: #{p.vehicleTypeId}
                               </span>
                             </td>
-                            <td className="py-4 px-4 text-right text-indigo-650 font-mono font-bold">
+                            <td className="py-4 px-4 text-right text-indigo-600 font-mono font-bold">
                               {Number(p.hourlyRate).toLocaleString('vi-VN')}đ
                             </td>
-                            <td className="py-4 px-4 text-right text-indigo-650 font-mono font-bold">
+                            <td className="py-4 px-4 text-right text-indigo-600 font-mono font-bold">
                               {Number(p.dailyRate).toLocaleString('vi-VN')}đ
                             </td>
                             <td className="py-4 px-4 text-right text-rose-600 font-mono">
@@ -357,7 +357,7 @@ export default function AdminPolicies() {
                             <td className="py-4 pl-4 text-right space-x-2">
                               <button
                                 onClick={() => handleEditClick(p)}
-                                className="text-indigo-650 hover:bg-indigo-50 border border-transparent px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                                className="text-indigo-600 hover:bg-indigo-50 border border-transparent px-2.5 py-1.5 rounded-lg transition cursor-pointer"
                               >
                                 Sửa
                               </button>

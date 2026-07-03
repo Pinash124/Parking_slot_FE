@@ -139,7 +139,7 @@ export default function StaffCheckOut() {
           {/* Column 1: Cashier Checkout Preparation */}
           <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-6">
             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest pb-3 border-b border-slate-100 flex items-center">
-              <span className="w-2 h-2 bg-indigo-650 rounded-full mr-2"></span>
+              <span className="w-2 h-2 bg-indigo-600 rounded-full mr-2"></span>
               1. Bàn thu ngân (Tính phí đỗ xe)
             </h3>
 
@@ -220,7 +220,7 @@ export default function StaffCheckOut() {
                   </div>
                   <div className="flex justify-between pt-3 border-t border-slate-200">
                     <span className="text-sm font-extrabold text-slate-800">Tổng cộng hóa đơn:</span>
-                    <span className="text-lg font-black text-indigo-650">
+                    <span className="text-lg font-black text-indigo-600">
                       {Number(invoice.totalFee || 0).toLocaleString('vi-VN')}đ
                     </span>
                   </div>
@@ -362,7 +362,7 @@ export default function StaffCheckOut() {
                     <div className={`absolute bottom-0.5 right-2 transition-all duration-[4000ms] ${
                       isBarrierOpen ? 'translate-x-[-120px] opacity-100' : 'translate-x-0 opacity-20'
                     }`}>
-                      <div className="w-10 h-5 bg-indigo-650 rounded-md relative border border-indigo-400">
+                      <div className="w-10 h-5 bg-indigo-600 rounded-md relative border border-indigo-400">
                         <div className="absolute top-1 left-1.5 w-1.5 h-1 bg-white/30 rounded-sm"></div>
                         <div className="absolute top-1 right-1.5 w-2 h-1 bg-white/30 rounded-sm"></div>
                       </div>

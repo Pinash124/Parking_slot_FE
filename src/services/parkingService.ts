@@ -7,6 +7,7 @@ import type {
   FloorView,
   FloorRequest,
   VehicleTypeView,
+  VehicleView,
   VehicleTypeRequest,
   ZoneView,
   ZoneRequest,
@@ -468,5 +469,15 @@ export const parkingService = {
 
   deleteManagementPolicy: async (id: number): Promise<void> => {
     await api.delete(`/api/manager/pricing-policies/${id}`);
+  },
+
+  // ========== VEHICLES (ALL REGISTERED) ==========
+  getManagementVehicles: async (): Promise<VehicleView[]> => {
+    const response = await api.get<VehicleView[]>('/api/manager/vehicles');
+    return response.data;
+  },
+
+  deleteVehicleType: async (id: number): Promise<void> => {
+    await api.delete(`/api/manager/vehicle-types/${id}`);
   },
 };

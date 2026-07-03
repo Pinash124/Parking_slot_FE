@@ -25,11 +25,16 @@ export default function Header() {
     return location.pathname.startsWith(path);
   };
 
-  const role = currentUser?.role?.toUpperCase() || 'STAFF';
+  const rawRole = currentUser?.role?.toUpperCase() || 'STAFF';
+  let role = rawRole;
+  if (rawRole.includes('CUSTOMER') || rawRole.includes('USER')) role = 'CUSTOMER';
+  else if (rawRole.includes('STAFF') || rawRole.includes('OPERATOR')) role = 'STAFF';
+  else if (rawRole.includes('MANAGER')) role = 'MANAGER';
+  else if (rawRole.includes('ADMIN') || rawRole.includes('ADMINISTRATOR')) role = 'ADMIN';
+
   const getNavItems = () => {
     switch (role) {
       case 'CUSTOMER':
-      case 'USER':
         return [
           { label: 'Tổng quan', path: '/customer' },
           { label: 'Xe của tôi', path: '/customer/vehicles' },
@@ -37,29 +42,14 @@ export default function Header() {
           { label: 'Vé tháng', path: '/customer/monthly-passes' },
         ];
       case 'ADMIN':
-      case 'ADMINISTRATOR':
-        return [
-          { label: 'Tổng quan', path: '/admin' },
-          { label: 'Cấu hình bãi', path: '/admin/dashboard' },
-          { label: 'Biểu phí', path: '/admin/policies' },
-          { label: 'Người dùng', path: '/admin/users' },
-        ];
       case 'MANAGER':
         return [
           { label: 'Tổng quan', path: '/admin' },
-          { label: 'Cấu hình bãi', path: '/admin/dashboard' },
-          { label: 'Biểu phí', path: '/admin/policies' },
-          { label: 'Người dùng', path: '/admin/users' },
-          { label: 'Lịch sử lượt đỗ', path: '/admin/logs' },
         ];
       case 'STAFF':
-      case 'OPERATOR':
       default:
         return [
-          { label: 'Tổng quan', path: '/staff' },
-          { label: 'Cho xe vào', path: '/staff/check-in' },
-          { label: 'Cho xe ra', path: '/staff/check-out' },
-          { label: 'Cho xe ra/vào', path: '/staff/sessions' },
+          { label: 'Cho xe ra/vào', path: '/staff' },
           { label: 'Cổng Barie', path: '/staff/gate' },
           { label: 'Lịch sử lượt đỗ', path: '/staff/logs' },
         ];
@@ -122,7 +112,7 @@ export default function Header() {
                     to={item.path}
                     className={`inline-flex items-center px-4 h-full border-b-2 text-sm font-semibold transition-colors duration-200 ${
                       active
-                        ? 'border-indigo-600 text-indigo-650'
+                        ? 'border-indigo-600 text-indigo-600'
                         : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
                     }`}
                   >
@@ -167,13 +157,10 @@ export default function Header() {
                       onClick={() => setUserDropdownOpen(false)}
                       className={`flex items-center px-4 py-2.5 text-sm font-semibold transition-colors ${
                         isActive(getChangePasswordPath())
-                          ? 'bg-indigo-50 text-indigo-650'
+                          ? 'bg-indigo-50 text-indigo-600'
                           : 'text-slate-650 hover:bg-slate-50 hover:text-slate-800'
                       }`}
                     >
-                      <svg className="w-4 h-4 mr-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                      </svg>
                       Đổi mật khẩu
                     </Link>
 
@@ -182,11 +169,8 @@ export default function Header() {
                         setUserDropdownOpen(false);
                         handleLogout();
                       }}
-                      className="w-full flex items-center px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors text-left"
+                      className="w-full flex items-center px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 transition-colors text-left cursor-pointer"
                     >
-                      <svg className="w-4 h-4 mr-2.5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
                       Đăng xuất
                     </button>
                   </div>
@@ -199,16 +183,10 @@ export default function Header() {
           <div className="flex md:hidden items-center">
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="text-slate-500 hover:text-slate-700 p-2 rounded-xl border border-slate-200"
+              className="text-slate-500 hover:text-slate-700 p-2 font-bold"
               aria-label="Toggle menu"
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                {mobileMenuOpen ? (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                ) : (
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-                )}
-              </svg>
+              {mobileMenuOpen ? 'ĐÓNG' : 'MENU'}
             </button>
           </div>
         </div>
@@ -237,7 +215,7 @@ export default function Header() {
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold transition ${
                     active
-                      ? 'bg-indigo-50 text-indigo-650 font-bold'
+                      ? 'bg-indigo-50 text-indigo-600 font-bold'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-800'
                   }`}
                 >
@@ -253,13 +231,10 @@ export default function Header() {
               onClick={() => setMobileMenuOpen(false)}
               className={`flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold transition ${
                 isActive(getChangePasswordPath())
-                  ? 'bg-indigo-50 text-indigo-650'
+                  ? 'bg-indigo-50 text-indigo-600'
                   : 'text-slate-650 hover:bg-slate-50 hover:text-slate-800'
               }`}
             >
-              <svg className="w-4 h-4 mr-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
               Đổi mật khẩu
             </Link>
             
@@ -268,11 +243,8 @@ export default function Header() {
                 setMobileMenuOpen(false);
                 handleLogout();
               }}
-              className="w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50 transition"
+              className="w-full flex items-center px-3 py-2.5 rounded-xl text-sm font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
             >
-              <svg className="w-4 h-4 mr-2.5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
               Đăng xuất
             </button>
           </div>

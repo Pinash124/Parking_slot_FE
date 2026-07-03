@@ -91,7 +91,7 @@ export default function MyMonthlyPasses() {
                 <p className="text-xs text-slate-450">Bạn cần có phương tiện đã đăng ký trước khi làm vé tháng.</p>
                 <a
                   href="/customer/vehicles"
-                  className="inline-block px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 text-xs font-bold rounded-xl border border-indigo-100 transition"
+                  className="inline-block px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold rounded-xl border border-indigo-100 transition"
                 >
                   Đăng ký xe ngay
                 </a>
@@ -161,7 +161,7 @@ export default function MyMonthlyPasses() {
                 <button
                   type="submit"
                   disabled={registerPassMutation.isPending}
-                  className="w-full py-3 bg-indigo-650 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm active:scale-98"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm active:scale-98"
                 >
                   {registerPassMutation.isPending ? 'Đang gửi yêu cầu...' : 'Đăng Ký Vé Tháng'}
                 </button>
@@ -204,7 +204,7 @@ export default function MyMonthlyPasses() {
 
                         return (
                           <tr key={p.id} className="hover:bg-slate-50/50 transition">
-                            <td className="py-4 pr-4 font-mono text-slate-805">#{p.id}</td>
+                            <td className="py-4 pr-4 font-mono text-slate-800">#{p.id}</td>
                             <td className="py-4 px-4">
                               <span className="font-mono text-indigo-950 font-black tracking-wide">{p.plateNumber || `Xe ID #${p.vehicleId}`}</span>
                             </td>
@@ -212,7 +212,7 @@ export default function MyMonthlyPasses() {
                               <div>Từ: {startStr}</div>
                               <div>Đến: {endStr}</div>
                             </td>
-                            <td className="py-4 px-4 text-right text-indigo-650 font-mono font-bold">
+                            <td className="py-4 px-4 text-right text-indigo-600 font-mono font-bold">
                               {Number(p.price || 0).toLocaleString('vi-VN')}đ
                             </td>
                             <td className="py-4 px-4 text-slate-400 font-medium truncate max-w-[120px]">{p.note || '—'}</td>

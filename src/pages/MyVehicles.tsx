@@ -164,7 +164,7 @@ export default function MyVehicles() {
               <p className="text-xs text-slate-400 mt-1 mb-6">Đăng ký biển số xe của bạn để thực hiện đặt lịch và theo dõi lịch sử gửi xe tự động.</p>
               <button
                 onClick={() => setIsModalOpen(true)}
-                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-650 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition"
+                className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition"
               >
                 + Đăng ký ngay
               </button>
@@ -177,7 +177,7 @@ export default function MyVehicles() {
                   className="bg-white border border-slate-200/80 p-6 rounded-2xl shadow-sm hover:shadow-md hover:border-slate-300 transition duration-200 flex flex-col justify-between relative overflow-hidden group"
                 >
                   {/* Glowing card detail */}
-                  <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-650 group-hover:bg-indigo-500 transition"></div>
+                  <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-600 group-hover:bg-indigo-500 transition"></div>
 
                   <div className="space-y-4">
                     {/* Card Header: Plate number */}
@@ -188,7 +188,7 @@ export default function MyVehicles() {
                       <span className={`px-2 py-0.5 rounded text-[9px] font-bold border uppercase ${
                         v.status?.toUpperCase() === 'ACTIVE' 
                           ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                          : 'bg-slate-50 text-slate-500 border-slate-150'
+                          : 'bg-slate-50 text-slate-500 border-slate-200'
                       }`}>
                         {v.status?.toUpperCase() === 'ACTIVE' ? 'Hoạt động' : (v.status || 'N/A')}
                       </span>

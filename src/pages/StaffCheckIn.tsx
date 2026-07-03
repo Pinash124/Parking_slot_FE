@@ -244,7 +244,7 @@ export default function StaffCheckIn() {
                       type="button"
                       onClick={() => handleCheckReservation()}
                       disabled={searching}
-                      className="px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-650 text-xs font-bold rounded-xl border border-indigo-100 cursor-pointer transition disabled:opacity-50"
+                      className="px-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold rounded-xl border border-indigo-100 cursor-pointer transition disabled:opacity-50"
                     >
                       {searching ? 'Đang tìm...' : 'Kiểm tra'}
                     </button>
@@ -388,7 +388,7 @@ export default function StaffCheckIn() {
           {/* Column 2 & 3: Slot selection Map */}
           <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-3xl shadow-sm flex flex-col min-h-[450px]">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-6">
-              <h3 className="text-base font-extrabold text-slate-805">Sơ đồ vị trí đỗ xe còn trống</h3>
+              <h3 className="text-base font-extrabold text-slate-800">Sơ đồ vị trí đỗ xe còn trống</h3>
               <button 
                 onClick={() => refetchSlots()} 
                 className="text-[10px] px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg border border-slate-200 transition cursor-pointer"
@@ -469,7 +469,7 @@ export default function StaffCheckIn() {
             <div className="bg-white border border-slate-200 rounded-3xl p-6.5 shadow-2xl overflow-hidden flex flex-col justify-between text-slate-800 animate-in slide-in-from-left-6 duration-300">
               <div className="text-center pb-4 border-b border-dashed border-slate-200">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Hệ thống SmartParking</p>
-                <h4 className="text-xl font-black text-indigo-650 mt-1">VÉ XE VÀO CỔNG</h4>
+                <h4 className="text-xl font-black text-indigo-600 mt-1">VÉ XE VÀO CỔNG</h4>
                 <div className="inline-block mt-3 bg-slate-900 text-white font-mono font-bold px-4.5 py-1.5 rounded-lg text-sm tracking-widest">
                   {createdSession.ticketCode}
                 </div>
