@@ -16,7 +16,6 @@ import PaymentReturn from './pages/PaymentReturn';
 import ManagerDashboard from './pages/ManagerDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import ParkingSessions from './pages/ParkingSessions';
-import GateValidator from './pages/GateValidator';
 import ParkingLogs from './pages/ParkingLogs';
 import ChangePassword from './pages/ChangePassword';
 
@@ -121,7 +120,6 @@ export default function App() {
                   <Routes>
                     <Route path="/" element={<ParkingSessions />} />
                     <Route path="/sessions" element={<ParkingSessions />} />
-                    <Route path="/gate" element={<GateValidator />} />
                     <Route path="/logs" element={<ParkingLogs />} />
                     <Route path="/change-password" element={<ChangePassword />} />
                     <Route path="*" element={<Navigate to="/staff" replace />} />

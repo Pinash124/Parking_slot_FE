@@ -10,7 +10,7 @@ export default function ParkingLogs() {
   // Fetch all sessions
   const { data: sessions, isLoading, error, refetch } = useQuery({
     queryKey: ['allSessionsLogs'],
-    queryFn: parkingService.getAllSessions,
+    queryFn: () => parkingService.staffGetSessions(),
     refetchInterval: 10000,
   });
 
@@ -161,8 +161,8 @@ export default function ParkingLogs() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredSessions.map((session) => (
-                    <tr key={session.id || session.sessionId} className="hover:bg-slate-50/50">
-                      <td className="px-6 py-3.5 font-mono text-slate-500">#{session.id || session.sessionId}</td>
+                    <tr key={session.id} className="hover:bg-slate-50/50">
+                      <td className="px-6 py-3.5 font-mono text-slate-500">#{session.id}</td>
                       <td className="px-6 py-3.5 font-bold text-slate-800">{session.ticketCode}</td>
                       <td className="px-6 py-3.5 text-slate-600">{session.licensePlate || `Xe #${session.vehicleId}`}</td>
                       <td className="px-6 py-3.5 text-slate-600">{session.slotCode || `Slot #${session.slotId}`}</td>

@@ -49,9 +49,8 @@ export default function Header() {
       case 'STAFF':
       default:
         return [
-          { label: 'Cho xe ra/vào', path: '/staff' },
-          { label: 'Cổng Barie', path: '/staff/gate' },
-          { label: 'Lịch sử lượt đỗ', path: '/staff/logs' },
+          { label: 'Kiểm Soát Ra/Vào & Barrier', path: '/staff' },
+          { label: 'Lịch sử hệ thống', path: '/staff/logs' },
         ];
     }
   };

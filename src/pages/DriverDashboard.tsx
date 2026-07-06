@@ -6,15 +6,13 @@ import { authService } from '../services/authService';
 import { parkingService } from '../services/parkingService';
 import { userPortalService } from '../services/userPortalService';
 import type {
-  ReservationCreateRequest,
   FeedbackCreateRequest,
-  SessionCheckInRequest,
 } from '../types/parking';
 
 export default function DriverDashboard() {
   const queryClient = useQueryClient();
   const currentUser = authService.getCurrentUser();
-  const [activeTab, setActiveTab] = useState<'info' | 'booking' | 'ticket' | 'feedback'>('ticket'); // Default to ticket to show session
+  const [activeTab, setActiveTab] = useState<'info' | 'ticket' | 'feedback'>('ticket'); // Default to ticket to show session
 
   // Additional states for services and QR modal
   const [selectedServiceId, setSelectedServiceId] = useState('');
@@ -22,10 +20,10 @@ export default function DriverDashboard() {
   const [showPersonalQrModal, setShowPersonalQrModal] = useState(false);
   const [copiedDescription, setCopiedDescription] = useState(false);
 
-  // Stats / Live Slots Query
+    // Stats / Live Slots Query (using public info)
   const { data: stats } = useQuery({
-    queryKey: ['dashboardOverview'],
-    queryFn: () => parkingService.getOverviewReport(),
+    queryKey: ['facilityInfo'],
+    queryFn: () => parkingService.getFacilityInfo(),
     refetchInterval: 15000,
   });
 
@@ -43,69 +41,20 @@ export default function DriverDashboard() {
     retry: false,
   });
 
-  // Booking / Reservation history
-  const { data: reservationsData } = useQuery({
-    queryKey: ['myReservations'],
-    queryFn: () => userPortalService.getMyReservations(0, 50),
-  });
-  const bookings = reservationsData?.content || [];
+  
 
-  // My Vehicles
-  const { data: vehicles = [] } = useQuery({
-    queryKey: ['myVehicles'],
-    queryFn: () => userPortalService.getMyVehicles(),
-  });
+  
 
-  // Zones for booking selector
-  const { data: zones = [] } = useQuery({
-    queryKey: ['zones'],
-    queryFn: () => parkingService.getZones(),
-  });
+  
 
-  // Fetch slots to filter available ones for simulate check-in
-  const { data: slots = [] } = useQuery({
-    queryKey: ['slots'],
-    queryFn: () => parkingService.getSlots(),
-  });
-  const availableSlotsList = slots.filter((s) => s.status === 'AVAILABLE');
+  
 
   // --- MUTATIONS ---
-  const bookingMutation = useMutation({
-    mutationFn: (payload: ReservationCreateRequest) => userPortalService.createReservation(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['myReservations'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
-      alert('Đăng ký đặt chỗ trước thành công trên hệ thống!');
-      setSelectedVehicleId('');
-      setSelectedZoneId('');
-      setStartTime('');
-      setEndTime('');
-    },
-    onError: (err: any) => alert('Lỗi đặt chỗ: ' + (err.response?.data?.message || err.message)),
-  });
+  
 
-  const cancelBookingMutation = useMutation({
-    mutationFn: (id: number) => parkingService.cancelReservation(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['myReservations'] });
-      alert('Đã hủy đặt chỗ thành công.');
-    },
-    onError: (err: any) => alert('Lỗi khi hủy: ' + (err.response?.data?.message || err.message)),
-  });
+  
 
-  const checkInMutation = useMutation({
-    mutationFn: (payload: SessionCheckInRequest) =>
-      parkingService.staffCheckIn('GATE_IN_01', payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentSession'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboardOverview'] });
-      queryClient.invalidateQueries({ queryKey: ['slots'] });
-      alert('Simulated Check-in thành công!');
-      setSimulateLicensePlate('');
-      setSimulateSlotId('');
-    },
-    onError: (err: any) => alert('Lỗi Check-in: ' + (err.response?.data?.message || err.message)),
-  });
+  
 
   // VNPAY redirect mutation
   const checkoutMutation = useMutation({
@@ -166,15 +115,9 @@ export default function DriverDashboard() {
     onError: (err: any) => alert('Lỗi khi gửi phản hồi: ' + (err.response?.data?.message || err.message)),
   });
 
-  // --- STATE FOR BOOKING / RESERVATION ---
-  const [selectedVehicleId, setSelectedVehicleId] = useState('');
-  const [selectedZoneId, setSelectedZoneId] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  
 
-  // --- STATE FOR CHECKIN SIMULATION ---
-  const [simulateLicensePlate, setSimulateLicensePlate] = useState('');
-  const [simulateSlotId, setSimulateSlotId] = useState('');
+  
 
   // --- FEEDBACK ---
   const [feedbackCategory, setFeedbackCategory] = useState('OTHER');
@@ -200,33 +143,7 @@ export default function DriverDashboard() {
     return () => clearInterval(interval);
   }, [currentSession]);
 
-  const handleBookingSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedVehicleId || !selectedZoneId || !startTime || !endTime) {
-      alert('Vui lòng chọn xe, khu vực đỗ và thời gian.');
-      return;
-    }
-    bookingMutation.mutate({
-      vehicleId: parseInt(selectedVehicleId, 10),
-      zoneId: parseInt(selectedZoneId, 10),
-      startTime: new Date(startTime).toISOString(),
-      endTime: new Date(endTime).toISOString(),
-    });
-  };
-
-  const handleSimulateCheckIn = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!simulateLicensePlate || !simulateSlotId) {
-      alert('Vui lòng nhập biển số xe và chọn ô đỗ.');
-      return;
-    }
-    checkInMutation.mutate({
-      licensePlate: simulateLicensePlate.trim().toUpperCase(),
-      slotId: parseInt(simulateSlotId, 10),
-    });
-  };
-
-  const handleFeedbackSubmit = (e: React.FormEvent) => {
+      const handleFeedbackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!feedbackContent) return;
     submitFeedbackMutation.mutate({
@@ -298,16 +215,7 @@ export default function DriverDashboard() {
             Bãi Xe & Bảng Giá
           </button>
 
-          <button
-            onClick={() => setActiveTab('booking')}
-            className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
-              activeTab === 'booking' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            Đặt Chỗ Trước
-          </button>
-
-          <button
+                    <button
             onClick={() => setActiveTab('feedback')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'feedback' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-800'
@@ -343,46 +251,7 @@ export default function DriverDashboard() {
                   </Link>
                 </div>
 
-                {/* Simulate Check-in Block for Testing */}
-                <div className="pt-6 border-t border-slate-100 text-left">
-                  <form onSubmit={handleSimulateCheckIn} className="space-y-3">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Giả lập xe vào hầm (Chỉ dành cho thử nghiệm)</p>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Biển số xe</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="Ví dụ: 30A-123.45"
-                        value={simulateLicensePlate}
-                        onChange={(e) => setSimulateLicensePlate(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs uppercase font-bold focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Chọn ô đỗ (Vị trí)</label>
-                      <select
-                        value={simulateSlotId}
-                        onChange={(e) => setSimulateSlotId(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
-                        required
-                      >
-                        <option value="">-- Chọn Vị Trí --</option>
-                        {availableSlotsList.map((slot) => (
-                          <option key={slot.id} value={slot.id}>
-                            {slot.slotCode} ({slot.vehicleTypeName || `Loại #${slot.vehicleTypeId}`})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <button
-                      type="submit"
-                      disabled={checkInMutation.isPending}
-                      className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-[10px] font-bold cursor-pointer transition"
-                    >
-                      {checkInMutation.isPending ? 'Đang kích hoạt...' : 'Kích Hoạt Vé Xe Giả Lập'}
-                    </button>
-                  </form>
-                </div>
+
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -655,133 +524,7 @@ export default function DriverDashboard() {
         )}
 
         {/* Tab 3: Booking Form */}
-        {activeTab === 'booking' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-5">
-              <h3 className="text-base font-bold text-slate-800 pb-3 border-b border-slate-100 flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full"></span>
-                <span>Đặt Chỗ Trước (Booking)</span>
-              </h3>
 
-              <form onSubmit={handleBookingSubmit} className="space-y-4 text-xs">
-                <div>
-                  <label className="block font-bold text-slate-500 mb-1.5">Chọn Xe Đăng Ký Gửi</label>
-                  <select
-                    value={selectedVehicleId}
-                    onChange={(e) => setSelectedVehicleId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-850 focus:outline-none font-bold"
-                    required
-                  >
-                    <option value="">-- Chọn Xe --</option>
-                    {vehicles.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.plateNumber} ({v.brand || 'N/A'})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-500 mb-1.5">Chọn Khu Vực Đỗ</label>
-                  <select
-                    value={selectedZoneId}
-                    onChange={(e) => setSelectedZoneId(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-855 focus:outline-none font-bold"
-                    required
-                  >
-                    <option value="">-- Chọn Phân Khu --</option>
-                    {zones.map((z) => (
-                      <option key={z.id} value={z.id}>
-                        {z.zoneName} ({z.vehicleTypeName})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-500 mb-1.5">Giờ Xe Vào Dự Kiến</label>
-                  <input
-                    type="datetime-local"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-500 mb-1.5">Giờ Xe Ra Dự Kiến</label>
-                  <input
-                    type="datetime-local"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
-                    required
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={bookingMutation.isPending}
-                  className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm"
-                >
-                  {bookingMutation.isPending ? 'Đang đăng ký...' : 'Xác Nhận Đăng Ký Đặt Lịch'}
-                </button>
-              </form>
-            </div>
-
-            {/* Reservation History List in tab */}
-            <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col">
-              <h3 className="text-base font-bold text-slate-800 mb-4 border-b border-slate-100 pb-3">Các yêu cầu đặt lịch của bạn</h3>
-              
-              {bookings.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center text-slate-400 text-xs py-10">
-                  Bạn chưa đăng ký đặt lịch đỗ xe lần nào
-                </div>
-              ) : (
-                <div className="space-y-3.5 overflow-y-auto max-h-[380px] pr-1">
-                  {bookings.map((booking) => {
-                    const statusClass = 
-                      booking.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                      booking.status === 'PENDING' ? 'bg-amber-50 text-amber-700 border-amber-100' :
-                      'bg-slate-50 text-slate-500 border-slate-200';
-
-                    return (
-                      <div 
-                        key={booking.id} 
-                        className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row justify-between sm:items-center text-xs gap-3"
-                      >
-                        <div className="space-y-1">
-                          <p className="font-bold text-slate-800">Biển số: {booking.licensePlate || `Xe #${booking.vehicleId}`}</p>
-                          <p className="text-slate-450 text-[10px]">
-                            Phân khu đỗ: {booking.zoneName || `Phân khu #${booking.zoneId}`}
-                          </p>
-                          <p className="text-slate-500 text-[10px]">
-                            Vào: {booking.startTime ? new Date(booking.startTime).toLocaleString('vi-VN') : 'N/A'} • 
-                            Ra: {booking.endTime ? new Date(booking.endTime).toLocaleString('vi-VN') : 'N/A'}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-3 self-end sm:self-center">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${statusClass}`}>
-                            {booking.status === 'APPROVED' ? 'Đã duyệt' : booking.status === 'PENDING' ? 'Chờ duyệt' : booking.status}
-                          </span>
-                          {booking.status === 'PENDING' && (
-                            <button
-                              onClick={() => cancelBookingMutation.mutate(booking.id)}
-                              className="text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-100 px-2 py-1 rounded-lg text-[10px] font-bold transition"
-                            >
-                              Hủy đặt
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
 
         {/* Tab 4: Feedback Form */}
         {activeTab === 'feedback' && (

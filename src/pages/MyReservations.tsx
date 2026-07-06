@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import { userPortalService } from '../services/userPortalService';
-import { parkingService } from '../services/parkingService';
 
 export default function MyReservations() {
   const queryClient = useQueryClient();
@@ -11,7 +10,7 @@ export default function MyReservations() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // QR Modal State
-  const [selectedPlateForQr, setSelectedPlateForQr] = useState<string | null>(null);
+  const [selectedReservationForQr, setSelectedReservationForQr] = useState<any | null>(null);
 
   // Form State
   const [selectedVehicleId, setSelectedVehicleId] = useState('');
@@ -42,27 +41,29 @@ export default function MyReservations() {
 
   const { data: buildings = [] } = useQuery({
     queryKey: ['buildings'],
-    queryFn: () => parkingService.getBuildings(),
+    queryFn: () => userPortalService.getUserBuildings(),
   });
 
   // Dynamic Floors Query based on selected Building
   const { data: floors = [], refetch: refetchFloors } = useQuery({
     queryKey: ['floors', selectedBuildingId],
-    queryFn: () => parkingService.getFloors(selectedBuildingId ? parseInt(selectedBuildingId, 10) : undefined),
+    queryFn: () => userPortalService.getUserFloors(selectedBuildingId ? parseInt(selectedBuildingId, 10) : undefined),
     enabled: !!selectedBuildingId,
   });
 
-  // Fetch management zones
-  const { data: rawZones = [] } = useQuery({
-    queryKey: ['managementZones'],
-    queryFn: () => parkingService.getManagementZones(),
+  // Dynamic Zones Query based on selected Floor (purpose=RESERVATION)
+  const { data: filteredZones = [], refetch: refetchZones } = useQuery({
+    queryKey: ['userZones', selectedFloorId],
+    queryFn: () => userPortalService.getUserZones(selectedFloorId ? parseInt(selectedFloorId, 10) : undefined, 'RESERVATION'),
+    enabled: !!selectedFloorId,
   });
 
-  // Fetch reservation history
-  const { data: reservations = [], isLoading: isHistoryLoading } = useQuery({
+  // Fetch reservation history (user portal scoped)
+  const { data: reservationsData, isLoading: isHistoryLoading } = useQuery({
     queryKey: ['reservationsList'],
-    queryFn: () => parkingService.getReservationsList(),
+    queryFn: () => userPortalService.getMyReservations(0, 100),
   });
+  const reservations = reservationsData?.content || [];
 
   // Trigger floor fetch when building changes
   useEffect(() => {
@@ -76,20 +77,18 @@ export default function MyReservations() {
     }
   }, [selectedBuildingId]);
 
-  // Trigger zone reset when floor changes
+  // Trigger zone refetch and reset when floor changes
   useEffect(() => {
+    if (selectedFloorId) {
+      refetchZones();
+    }
     setSelectedZoneId('');
   }, [selectedFloorId]);
-
-  // Filter zones in-memory based on selected floor
-  const filteredZones: any[] = selectedFloorId
-    ? rawZones.filter((z: any) => z.floorId === parseInt(selectedFloorId, 10))
-    : [];
 
   // Mutations
   const bookingMutation = useMutation({
     mutationFn: (payload: { vehicleId: number; zoneId: number; startTime: string; endTime: string }) =>
-      parkingService.createReservation(payload),
+      userPortalService.createReservation(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservationsList'] });
       showToast('Đặt chỗ giữ vị trí đỗ xe thành công!', 'success');
@@ -107,7 +106,7 @@ export default function MyReservations() {
   });
 
   const cancelMutation = useMutation({
-    mutationFn: (id: number) => parkingService.cancelReservation(id),
+    mutationFn: (id: number) => userPortalService.cancelReservation(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservationsList'] });
       showToast('Hủy yêu cầu đặt chỗ thành công.', 'success');
@@ -199,8 +198,10 @@ export default function MyReservations() {
       case 'PENDING':
         return 'bg-amber-50 text-amber-700 border-amber-100';
       case 'APPROVED':
-      case 'CONFIRMED':
         return 'bg-violet-50 text-violet-700 border-violet-150';
+      case 'CONFIRMED':
+      case 'COMPLETED':
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'CANCELLED':
         return 'bg-slate-50 text-slate-500 border-slate-200';
       default:
@@ -214,9 +215,10 @@ export default function MyReservations() {
       case 'PENDING':
         return 'Đang chờ duyệt';
       case 'APPROVED':
-        return 'Đã duyệt';
+        return 'Đã duyệt • Chờ đến';
       case 'CONFIRMED':
-        return 'Đã xác nhận';
+      case 'COMPLETED':
+        return '✓ Thành công';
       case 'CANCELLED':
         return 'Đã hủy';
       default:
@@ -351,9 +353,9 @@ export default function MyReservations() {
                   } rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-4 transition duration-205 disabled:opacity-50`}
                 >
                   <option value="">-- Chọn Khu Vực --</option>
-                  {filteredZones.map((z) => (
+                  {filteredZones.map((z: any) => (
                     <option key={z.id} value={z.id}>
-                      {z.zoneName} {z.capacity ? `(Dung lượng: ${z.capacity} chỗ)` : ''}
+                      {z.zoneName}
                     </option>
                   ))}
                 </select>
@@ -451,7 +453,7 @@ export default function MyReservations() {
                         const isCancellable = r.status?.toUpperCase() === 'PENDING' || r.status?.toUpperCase() === 'APPROVED';
                         
                         return (
-                          <tr key={r.id} className="hover:bg-slate-50/45 transition">
+                          <tr key={r.id} className={`hover:bg-slate-50/45 transition ${(r.status?.toUpperCase() === 'CONFIRMED' || r.status?.toUpperCase() === 'COMPLETED') ? 'bg-emerald-50/40' : ''}`}>
                             <td className="py-4 pr-4 font-bold text-slate-900 tracking-wide font-mono">
                               {code}
                             </td>
@@ -471,15 +473,26 @@ export default function MyReservations() {
                               </span>
                             </td>
                             <td className="py-4 pl-4 text-right space-x-2">
-                              {r.licensePlate && (r.status?.toUpperCase() === 'APPROVED' || r.status?.toUpperCase() === 'CONFIRMED') && (
+                              {/* Show QR button for APPROVED reservations (not yet checked in) */}
+                              {r.status?.toUpperCase() === 'APPROVED' && (
                                 <button
                                   type="button"
-                                  onClick={() => setSelectedPlateForQr(r.licensePlate)}
+                                  onClick={() => setSelectedReservationForQr(r)}
                                   className="text-violet-650 hover:text-violet-700 hover:bg-violet-50 px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer"
                                 >
                                   Xem QR
                                 </button>
                               )}
+                              {/* CONFIRMED / COMPLETED = vehicle entered, show success badge */}
+                              {(r.status?.toUpperCase() === 'CONFIRMED' || r.status?.toUpperCase() === 'COMPLETED') && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-200">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  Đã vào bãi
+                                </span>
+                              )}
+                              {/* Cancel only for PENDING or APPROVED */}
                               {isCancellable && (
                                 <button
                                   type="button"
@@ -490,7 +503,7 @@ export default function MyReservations() {
                                   Hủy đặt
                                 </button>
                               )}
-                              {!isCancellable && (!r.licensePlate || (r.status?.toUpperCase() !== 'APPROVED' && r.status?.toUpperCase() !== 'CONFIRMED')) && (
+                              {r.status?.toUpperCase() === 'CANCELLED' && (
                                 <span className="text-slate-350 text-xs italic font-normal">—</span>
                               )}
                             </td>
@@ -529,34 +542,50 @@ export default function MyReservations() {
       )}
 
       {/* QR Code Viewer Modal */}
-      {selectedPlateForQr && (
+      {selectedReservationForQr && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 cursor-default" onClick={() => setSelectedPlateForQr(null)}></div>
-          <div className="bg-white border border-slate-200 rounded-3xl p-6.5 max-w-sm w-full shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 text-center">
+          <div className="absolute inset-0 cursor-default" onClick={() => setSelectedReservationForQr(null)}></div>
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative z-10 animate-in zoom-in-95 duration-200 text-center">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <h3 className="text-base font-extrabold text-slate-800">Mã QR Đặt Chỗ</h3>
-              <button onClick={() => setSelectedPlateForQr(null)} className="text-slate-400 hover:text-slate-650 p-1.5 hover:bg-slate-100 rounded-lg transition cursor-pointer">
+              <h3 className="text-base font-extrabold text-slate-800">Mã QR Check-in</h3>
+              <button onClick={() => setSelectedReservationForQr(null)} className="text-slate-400 hover:text-slate-650 p-1.5 hover:bg-slate-100 rounded-lg transition cursor-pointer">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            
-            <p className="text-xs font-semibold text-slate-500 mb-2">Biển số xe đăng ký:</p>
-            <span className="inline-block bg-slate-100 px-4.5 py-2 rounded-2xl border border-slate-200 text-slate-850 font-black text-base tracking-wide font-mono uppercase mb-5">
-              {selectedPlateForQr}
-            </span>
 
-            <div className="w-40 h-40 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-2.5 mx-auto shadow-sm mb-4 animate-in zoom-in-95 duration-200">
+            {/* Info row */}
+            <div className="flex justify-center gap-3 mb-4">
+              <div className="bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl text-center">
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Biển số</p>
+                <p className="font-mono font-black text-slate-800 text-sm uppercase">{selectedReservationForQr.licensePlate}</p>
+              </div>
+              <div className="bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-xl text-center">
+                <p className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider">Mã đặt chỗ</p>
+                <p className="font-mono font-black text-indigo-800 text-sm">#{selectedReservationForQr.id}</p>
+              </div>
+            </div>
+
+            <div className="w-48 h-48 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-2.5 mx-auto shadow-sm mb-4 animate-in zoom-in-95 duration-200">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(selectedPlateForQr)}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(String(selectedReservationForQr.id))}`}
                 alt="Reservation QR Code"
                 className="w-full h-full object-contain"
               />
             </div>
 
+            {selectedReservationForQr.zoneName && (
+              <p className="text-xs text-slate-500 font-semibold mb-2">
+                Khu vực: <span className="text-slate-800 font-bold">{selectedReservationForQr.zoneName}</span>
+                {selectedReservationForQr.reservedSlotCode && (
+                  <> • Ô đỗ: <span className="text-indigo-700 font-bold">{selectedReservationForQr.reservedSlotCode}</span></>
+                )}
+              </p>
+            )}
+
             <p className="text-[10px] text-slate-400 leading-relaxed max-w-xs mx-auto">
-              Vui lòng xuất trình mã QR này tại cổng bãi đỗ xe để nhân viên trực cổng quét camera và kích hoạt lượt xe vào hầm.
+              Xuất trình mã QR này cho nhân viên tại cổng vào. Nhân viên sẽ quét để xác nhận đặt chỗ và mở barie cho xe vào.
             </p>
           </div>
         </div>

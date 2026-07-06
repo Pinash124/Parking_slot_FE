@@ -331,10 +331,14 @@ export interface ReservationCreateRequest {
 export interface ReservationResponse {
   id: number;
   userId?: number;
+  customerName?: string;
   vehicleId?: number;
   licensePlate?: string;
   zoneId?: number;
   zoneName?: string;
+  reservedSlotId?: number;
+  reservedSlotCode?: string;
+  reservedSlotStatus?: string;
   startTime?: string;
   endTime?: string;
   status: string;
@@ -505,4 +509,18 @@ export interface PaymentGatewayResponse {
   payment: PaymentResponse | null;
   exitDeadline: string | null;
 }
+
+export interface ParkingFacilityInfoResponse {
+  name: string;
+  address: string;
+  operationHours: string;
+  rules: string[];
+  vehicleTypes: any[];
+  pricingPolicies: any[];
+  totalSlots: number;
+  availableSlots: number;
+  occupiedSlots: number;
+  reservedSlots: number;
+}
+
 

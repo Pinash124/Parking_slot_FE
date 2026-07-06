@@ -30,6 +30,7 @@ import type {
   PageResponse,
   PaymentGatewayRequest,
   PaymentGatewayResponse,
+  ParkingFacilityInfoResponse,
 } from '../types/parking';
 
 export const parkingService = {
@@ -94,6 +95,13 @@ export const parkingService = {
     return response.data;
   },
 
+  staffGetSessions: async (status?: string): Promise<ParkingSessionResponse[]> => {
+    const response = await api.get<ParkingSessionResponse[]>('/api/staff/parking-sessions', {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
   // ========== PAYMENT GATEWAYS ==========
   createVnpayPayment: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
     const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/vnpay', payload);
@@ -102,6 +110,16 @@ export const parkingService = {
 
   createCashPayment: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
     const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/cash', payload);
+    return response.data;
+  },
+
+  createPersonalQrPayment: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
+    const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/personal-qr', payload);
+    return response.data;
+  },
+
+  getPaymentCheckoutStatus: async (sessionId: number): Promise<any> => {
+    const response = await api.get(`/api/payment-checkout/sessions/${sessionId}/status`);
     return response.data;
   },
 
@@ -480,4 +498,32 @@ export const parkingService = {
   deleteVehicleType: async (id: number): Promise<void> => {
     await api.delete(`/api/manager/vehicle-types/${id}`);
   },
+
+  // ========== PUBLIC PARKING FACILITY INFO ==========
+  getFacilityInfo: async (): Promise<ParkingFacilityInfoResponse> => {
+    const response = await api.get<ParkingFacilityInfoResponse>('/api/parking-info');
+    return response.data;
+  },
+
+  // ========== MANAGER - MONTHLY PASSES ==========
+  getManagerMonthlyPasses: async (): Promise<any[]> => {
+    const response = await api.get<any[]>('/api/manager/monthly-passes');
+    return response.data;
+  },
+
+  confirmManagerMonthlyPassPayment: async (id: number, payload?: { paymentMethod: string; referenceCode: string }): Promise<any> => {
+    const response = await api.post<any>(`/api/manager/monthly-passes/${id}/confirm-payment`, payload || {});
+    return response.data;
+  },
+
+  confirmManagerMonthlyPassPaymentByQr: async (payload: { qrContent: string; paymentMethod: string; referenceCode: string }): Promise<any> => {
+    const response = await api.post<any>('/api/manager/monthly-passes/confirm-payment/scan', payload);
+    return response.data;
+  },
+
+  cancelManagerMonthlyPass: async (id: number): Promise<any> => {
+    const response = await api.post<any>(`/api/manager/monthly-passes/${id}/cancel`);
+    return response.data;
+  },
 };
+

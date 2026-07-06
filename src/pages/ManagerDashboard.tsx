@@ -11,7 +11,7 @@ import type {
 
 export default function ManagerDashboard() {
   const queryClient = useQueryClient();
-  const [activeSubTab, setActiveSubTab] = useState<'parking' | 'vehicles' | 'slots' | 'rates' | 'reports' | 'exceptions' | 'feedbacks'>('parking');
+  const [activeSubTab, setActiveSubTab] = useState<'parking' | 'vehicles' | 'slots' | 'rates' | 'reports' | 'exceptions' | 'feedbacks' | 'passes'>('parking');
 
   // Stats / Live Slots Query
   const { data: stats } = useQuery({
@@ -115,6 +115,33 @@ export default function ManagerDashboard() {
     },
     onError: (err: any) => alert('Lỗi: ' + (err.response?.data?.message || err.message)),
   });
+
+  // --- MANAGER MONTHLY PASSES QUERIES & MUTATIONS ---
+  const { data: managerMonthlyPasses = [], isLoading: isPassesLoading } = useQuery({
+    queryKey: ['managerMonthlyPasses'],
+    queryFn: () => parkingService.getManagerMonthlyPasses(),
+    enabled: activeSubTab === 'passes',
+  });
+
+  const confirmPassPaymentMutation = useMutation({
+    mutationFn: ({ id, paymentMethod, referenceCode }: { id: number; paymentMethod: string; referenceCode: string }) =>
+      parkingService.confirmManagerMonthlyPassPayment(id, { paymentMethod, referenceCode }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managerMonthlyPasses'] });
+      alert('Đã xác nhận thanh toán vé tháng thành công!');
+    },
+    onError: (err: any) => alert('Lỗi xác nhận thanh toán: ' + (err.response?.data?.message || err.message)),
+  });
+
+  const cancelPassMutation = useMutation({
+    mutationFn: (id: number) => parkingService.cancelManagerMonthlyPass(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managerMonthlyPasses'] });
+      alert('Đã hủy vé tháng thành công!');
+    },
+    onError: (err: any) => alert('Lỗi hủy vé tháng: ' + (err.response?.data?.message || err.message)),
+  });
+
 
   // --- STATE FOR FORMS & FILTERS ---
   const [newZoneName, setNewZoneName] = useState('');
@@ -257,6 +284,14 @@ export default function ManagerDashboard() {
             }`}
           >
             Ý Kiến Phản Hồi
+          </button>
+          <button
+            onClick={() => setActiveSubTab('passes')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition whitespace-nowrap cursor-pointer ${
+              activeSubTab === 'passes' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'
+            }`}
+          >
+            Vé Tháng Cư Dân
           </button>
         </div>
 
@@ -834,6 +869,108 @@ export default function ManagerDashboard() {
               )}
             </div>
           </div>
+        )}
+
+        {/* Tab 8: Monthly Passes Management */}
+        {activeSubTab === 'passes' && (
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+              <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Danh Sách Đăng Ký Vé Tháng Cư Dân</h3>
+              
+              {isPassesLoading ? (
+                <div className="text-center py-12 text-slate-400 text-xs">Đang tải danh sách vé tháng...</div>
+              ) : managerMonthlyPasses.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs">Không có đăng ký vé tháng nào.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+                        <th className="pb-3 px-2">ID</th>
+                        <th className="pb-3 px-2">Biển Số Xe</th>
+                        <th className="pb-3 px-2">Vị Trí</th>
+                        <th className="pb-3 px-2">Hạn Hiệu Lực</th>
+                        <th className="pb-3 px-2 text-right">Tổng Tiền</th>
+                        <th className="pb-3 px-2 text-center">Trạng Thái</th>
+                        <th className="pb-3 px-2 text-right">Hành Động</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                      {managerMonthlyPasses.map((p: any) => {
+                        const startStr = p.startDate ? new Date(p.startDate).toLocaleDateString('vi-VN') : '—';
+                        const endStr = p.endDate ? new Date(p.endDate).toLocaleDateString('vi-VN') : '—';
+                        const isPending = p.status?.toUpperCase() === 'PENDING_PAYMENT';
+                        
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/50 transition">
+                            <td className="py-3 px-2 font-mono text-slate-400">#{p.id}</td>
+                            <td className="py-3 px-2">
+                              <span className="font-mono text-slate-900 uppercase block">{p.licensePlate || `Xe #${p.vehicleId}`}</span>
+                              <span className="text-[9px] text-slate-400 block font-normal">{p.vehicleTypeName || 'N/A'}</span>
+                            </td>
+                            <td className="py-3 px-2">
+                              <span className="text-slate-700 block font-bold">{p.slotCode || 'Chưa xếp'}</span>
+                              <span className="text-[9px] text-slate-400 block font-normal">Trạng thái slot: {p.slotStatus || '—'}</span>
+                            </td>
+                            <td className="py-3 px-2 text-slate-500 font-mono text-[9px]">
+                              <div>Từ: {startStr}</div>
+                              <div>Đến: {endStr}</div>
+                            </td>
+                            <td className="py-3 px-2 text-right font-mono text-indigo-600 font-bold">
+                              {Number(p.totalAmount || 0).toLocaleString('vi-VN')}đ
+                            </td>
+                            <td className="py-3 px-2 text-center">
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border uppercase ${
+                                p.status === 'ACTIVE' 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  : p.status === 'SCHEDULED'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                  : p.status === 'PENDING_PAYMENT'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}>
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-2 text-right">
+                              {isPending ? (
+                                <div className="flex flex-col xl:flex-row justify-end gap-1">
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Xác nhận thanh toán tiền mặt cho vé tháng #${p.id}?`)) {
+                                        confirmPassPaymentMutation.mutate({
+                                          id: p.id,
+                                          paymentMethod: 'CASH',
+                                          referenceCode: 'CASH-CONFIRM-' + Date.now(),
+                                        });
+                                      }
+                                    }}
+                                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-700 rounded text-[9px] font-bold transition cursor-pointer"
+                                  >
+                                    Thu Tiền Mặt
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Bạn có chắc chắn muốn hủy đăng ký vé tháng #${p.id}?`)) {
+                                        cancelPassMutation.mutate(p.id);
+                                      }
+                                    }}
+                                    className="px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-600 rounded text-[9px] font-bold transition cursor-pointer"
+                                  >
+                                    Hủy Vé
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-normal italic">Đã thanh toán</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
         )}
       </main>
     </div>

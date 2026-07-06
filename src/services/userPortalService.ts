@@ -9,6 +9,9 @@ import type {
   PageResponse,
   VehicleTypeView,
   PricingView,
+  BuildingView,
+  FloorView,
+  ZoneView,
 } from '../types/parking';
 
 export const userPortalService = {
@@ -57,6 +60,33 @@ export const userPortalService = {
     return response.data;
   },
 
+  // ========== USER GEOGRAPHY PORTAL (NEW) ==========
+  getUserBuildings: async (): Promise<BuildingView[]> => {
+    const response = await api.get<BuildingView[]>('/api/user/buildings');
+    return response.data;
+  },
+
+  getUserFloors: async (buildingId?: number): Promise<FloorView[]> => {
+    const response = await api.get<FloorView[]>('/api/user/floors', {
+      params: buildingId ? { buildingId } : undefined,
+    });
+    return response.data;
+  },
+
+  getUserZones: async (floorId?: number, purpose = 'RESERVATION'): Promise<ZoneView[]> => {
+    const response = await api.get<ZoneView[]>('/api/user/zones', {
+      params: { floorId, purpose },
+    });
+    return response.data;
+  },
+
+  getAvailableSlots: async (zoneId?: number, vehicleTypeId?: number, purpose = 'PARKING'): Promise<any[]> => {
+    const response = await api.get<any[]>('/api/parking-info/available-slots', {
+      params: { zoneId, vehicleTypeId, purpose },
+    });
+    return response.data;
+  },
+
   // ========== RESERVATIONS ==========
   createReservation: async (payload: ReservationCreateRequest): Promise<ReservationResponse> => {
     const response = await api.post<ReservationResponse>('/api/user/reservations', payload);
@@ -67,6 +97,11 @@ export const userPortalService = {
     const response = await api.get<PageResponse<ReservationResponse>>('/api/user/reservations', {
       params: { page, size },
     });
+    return response.data;
+  },
+
+  cancelReservation: async (id: number): Promise<ReservationResponse> => {
+    const response = await api.patch<ReservationResponse>(`/api/user/reservations/${id}/cancel`);
     return response.data;
   },
 
@@ -107,8 +142,18 @@ export const userPortalService = {
   },
 
   createPersonalQrPayment: async (payload: { sessionId: number; amount: number }): Promise<{ qrCodeUrl: string; transferDescription: string; amount: number }> => {
-    const response = await api.post<{ qrCodeUrl: string; transferDescription: string; amount: number }>('/api/payment-gateways/personal-qr', payload);
-    return response.data;
+    const response = await api.post<any>('/api/payment-gateways/personal-qr', {
+      sessionId: payload.sessionId,
+      amount: payload.amount,
+    });
+    const data = response.data;
+    const qrImageUrl = data.qrImageUrl || '';
+    const absoluteQrUrl = qrImageUrl.startsWith('http') ? qrImageUrl : `${api.defaults.baseURL || 'http://localhost:8080'}${qrImageUrl}`;
+    return {
+      qrCodeUrl: absoluteQrUrl,
+      transferDescription: data.transferContent || data.referenceCode || '',
+      amount: data.amount,
+    };
   },
 
   verifyVnpayReturn: async (queryString: string): Promise<{ success: boolean; amount: number; message?: string; transactionId?: string; exitDeadline?: string | null }> => {
@@ -116,13 +161,25 @@ export const userPortalService = {
     return response.data;
   },
 
+  // ========== MONTHLY PASSES ==========
   monthlyPasses: async (): Promise<any[]> => {
     const response = await api.get<any[]>('/api/user/monthly-passes');
     return response.data;
   },
 
-  registerMonthlyPass: async (payload: { vehicleId: number; startDate: string; months: number; note: string }): Promise<any> => {
+  registerMonthlyPass: async (payload: { vehicleId: number; slotId: number; startDate: string; months: number; note: string }) => {
     const response = await api.post<any>('/api/user/monthly-passes', payload);
     return response.data;
   },
+
+  prepareMonthlyPassOnlinePayment: async (id: number): Promise<any> => {
+    const response = await api.post<any>(`/api/user/monthly-passes/${id}/payment/online-qr`);
+    return response.data;
+  },
+
+  prepareMonthlyPassCashBill: async (id: number): Promise<any> => {
+    const response = await api.post<any>(`/api/user/monthly-passes/${id}/payment/cash-bill`);
+    return response.data;
+  },
 };
+
