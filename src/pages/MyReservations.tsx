@@ -39,6 +39,15 @@ export default function MyReservations() {
     queryFn: () => userPortalService.getUserPortalVehicles(),
   });
 
+  // Filter vehicles to only show cars (ô tô)
+  const carVehicles = vehicles.filter(
+    (v: any) =>
+      v.vehicleTypeName?.toLowerCase().includes('car') ||
+      v.vehicleTypeName?.toLowerCase().includes('ô tô') ||
+      v.vehicleTypeName?.toLowerCase().includes('4 bánh') ||
+      v.vehicleTypeId === 1
+  );
+
   const { data: buildings = [] } = useQuery({
     queryKey: ['buildings'],
     queryFn: () => userPortalService.getUserBuildings(),
@@ -264,11 +273,15 @@ export default function MyReservations() {
                   } rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-4 transition duration-205`}
                 >
                   <option value="">-- Chọn Xe --</option>
-                  {vehicles.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      {v.plateNumber} ({v.brand || 'Chưa rõ hãng'})
-                    </option>
-                  ))}
+                  {carVehicles.length === 0 ? (
+                    <option value="" disabled>-- Vui lòng đăng ký xe ô tô trước --</option>
+                  ) : (
+                    carVehicles.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.plateNumber} ({v.brand || 'Chưa rõ hãng'})
+                      </option>
+                    ))
+                  )}
                 </select>
                 {vehicleError && (
                   <p className="mt-1 text-[10px] text-rose-500 font-medium animate-in fade-in duration-150">

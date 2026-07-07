@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
+import QrScannerModal from '../components/QrScannerModal';
 import { adminService } from '../services/adminService';
 import { parkingService } from '../services/parkingService';
 import type {
@@ -13,7 +14,7 @@ import type {
   VehicleTypeView,
 } from '../types/parking';
 
-type MainTabType = 'overview' | 'slots' | 'vehicles' | 'accounts' | 'system';
+type MainTabType = 'overview' | 'slots' | 'vehicles' | 'accounts' | 'system' | 'passes';
 type VehiclesSubTabType = 'vehicleList' | 'vehicleTypes';
 type SystemSubTabType = 'hardware' | 'settings' | 'logs';
 
@@ -23,6 +24,7 @@ export default function AdminDashboard() {
 
   const [vehiclesSubTab, setVehiclesSubTab] = useState<VehiclesSubTabType>('vehicleList');
   const [systemSubTab, setSystemSubTab] = useState<SystemSubTabType>('hardware');
+  const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
 
   // --- API QUERIES ---
   const { data: overviewData } = useQuery({
@@ -80,6 +82,60 @@ export default function AdminDashboard() {
     queryKey: ['managementVehicles'],
     queryFn: () => parkingService.getManagementVehicles(),
   });
+
+  // --- ADMIN MONTHLY PASSES QUERIES & MUTATIONS ---
+  const { data: managerMonthlyPasses = [], isLoading: isPassesLoading } = useQuery({
+    queryKey: ['managerMonthlyPasses'],
+    queryFn: () => parkingService.getManagerMonthlyPasses(),
+    enabled: activeTab === 'passes',
+  });
+
+  const confirmPassPaymentMutation = useMutation({
+    mutationFn: ({ id, paymentMethod, referenceCode }: { id: number; paymentMethod: string; referenceCode: string }) =>
+      parkingService.confirmManagerMonthlyPassPayment(id, { paymentMethod, referenceCode }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managerMonthlyPasses'] });
+      alert('Đã xác nhận thanh toán vé tháng thành công!');
+    },
+    onError: (err: any) => alert('Lỗi xác nhận thanh toán: ' + (err.response?.data?.message || err.message)),
+  });
+
+  const cancelPassMutation = useMutation({
+    mutationFn: (id: number) => parkingService.cancelManagerMonthlyPass(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managerMonthlyPasses'] });
+      alert('Đã hủy vé tháng thành công!');
+    },
+    onError: (err: any) => alert('Lỗi hủy vé tháng: ' + (err.response?.data?.message || err.message)),
+  });
+
+  const confirmPassPaymentByQrMutation = useMutation({
+    mutationFn: (payload: { qrContent: string; paymentMethod: string; referenceCode: string }) =>
+      parkingService.confirmManagerMonthlyPassPaymentByQr(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['managerMonthlyPasses'] });
+      alert('Đã xác nhận thanh toán vé tháng qua QR thành công!');
+    },
+    onError: (err: any) => alert('Lỗi xác nhận thanh toán qua QR: ' + (err.response?.data?.message || err.message)),
+  });
+
+  const handleQrScanSuccess = (decodedText: string) => {
+    console.log("Decoded monthly pass QR: ", decodedText);
+    if (!decodedText.startsWith('MONTHLY_PASS')) {
+      alert('Mã QR không đúng định dạng hóa đơn vé tháng.');
+      return;
+    }
+
+    const refCode = window.prompt("Quét QR vé tháng thành công. Nhập mã giao dịch chuyển khoản ngân hàng (Reference Code):", "BANK-TXN-" + Date.now());
+    if (refCode === null) return; // User cancelled
+
+    confirmPassPaymentByQrMutation.mutate({
+      qrContent: decodedText,
+      paymentMethod: 'ONLINE_QR',
+      referenceCode: refCode.trim() || 'BANK-TXN-' + Date.now(),
+    });
+    setIsQrScannerOpen(false);
+  };
 
 
 
@@ -359,6 +415,14 @@ export default function AdminDashboard() {
               }`}
             >
               Tài khoản người dùng
+            </button>
+            <button
+              onClick={() => setActiveTab('passes')}
+              className={`w-full text-left px-4.5 py-3 rounded-2xl text-xs font-bold transition flex items-center justify-between cursor-pointer ${
+                activeTab === 'passes' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' : 'bg-white border border-slate-200 text-slate-650 hover:bg-slate-50'
+              }`}
+            >
+              Quản lý vé tháng cư dân
             </button>
             <button
               onClick={() => setActiveTab('system')}
@@ -1216,8 +1280,128 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
+
+        {/* Tab 6: Monthly Passes Management for Admin */}
+        {activeTab === 'passes' && (
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3 gap-2">
+                <h3 className="text-sm font-bold text-slate-800">Danh Sách Đăng Ký Vé Tháng Cư Dân (Admin Panel)</h3>
+                <button
+                  onClick={() => setIsQrScannerOpen(true)}
+                  className="inline-flex items-center justify-center px-4.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm shadow-emerald-600/10 active:scale-98"
+                >
+                  <svg className="w-4.5 h-4.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m0 11v2m5-10v-1m-10 1v-1M5 8h2m10 0h2m-14 4h2m10 0h2m-14 4h2m10 0h2M7 16h10M7 12h10M7 8h10" />
+                  </svg>
+                  Quét QR Xác Nhận
+                </button>
+              </div>
+              
+              {isPassesLoading ? (
+                <div className="text-center py-12 text-slate-400 text-xs">Đang tải danh sách vé tháng...</div>
+              ) : managerMonthlyPasses.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs">Không có đăng ký vé tháng nào.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase text-[10px] tracking-wider">
+                        <th className="pb-3 px-2">ID</th>
+                        <th className="pb-3 px-2">Biển Số Xe</th>
+                        <th className="pb-3 px-2">Vị Trí</th>
+                        <th className="pb-3 px-2">Hạn Hiệu Lực</th>
+                        <th className="pb-3 px-2 text-right">Tổng Tiền</th>
+                        <th className="pb-3 px-2 text-center">Trạng Thái</th>
+                        <th className="pb-3 px-2 text-right">Hành Động</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                      {managerMonthlyPasses.map((p: any) => {
+                        const startStr = p.startDate ? new Date(p.startDate).toLocaleDateString('vi-VN') : '—';
+                        const endStr = p.endDate ? new Date(p.endDate).toLocaleDateString('vi-VN') : '—';
+                        const isPending = p.status?.toUpperCase() === 'PENDING_PAYMENT';
+                        
+                        return (
+                          <tr key={p.id} className="hover:bg-slate-50/50 transition">
+                            <td className="py-3 px-2 font-mono text-slate-400">#{p.id}</td>
+                            <td className="py-3 px-2">
+                              <span className="font-mono text-slate-900 uppercase block">{p.licensePlate || `Xe #${p.vehicleId}`}</span>
+                              <span className="text-[9px] text-slate-400 block font-normal">{p.vehicleTypeName || 'N/A'}</span>
+                            </td>
+                            <td className="py-3 px-2">
+                              <span className="text-slate-700 block font-bold">{p.slotCode || 'Chưa xếp'}</span>
+                              <span className="text-[9px] text-slate-400 block font-normal">Trạng thái slot: {p.slotStatus || '—'}</span>
+                            </td>
+                            <td className="py-3 px-2 text-slate-500 font-mono text-[9px]">
+                              <div>Từ: {startStr}</div>
+                              <div>Đến: {endStr}</div>
+                            </td>
+                            <td className="py-3 px-2 text-right font-mono text-indigo-600 font-bold">
+                              {Number(p.totalAmount || 0).toLocaleString('vi-VN')}đ
+                            </td>
+                            <td className="py-3 px-2 text-center">
+                              <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold border uppercase ${
+                                p.status === 'ACTIVE' 
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                                  : p.status === 'SCHEDULED'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-100'
+                                  : p.status === 'PENDING_PAYMENT'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-100'
+                                  : 'bg-slate-100 text-slate-500 border-slate-200'
+                              }`}>
+                                {p.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-2 text-right">
+                              {isPending ? (
+                                <div className="flex flex-col xl:flex-row justify-end gap-1">
+                                  <button
+                                    onClick={() => {
+                                      const refCode = window.prompt(`Xác nhận thanh toán chuyển khoản cho vé tháng #${p.id}. Nhập mã giao dịch ngân hàng (Reference Code):`, "BANK-TXN-" + Date.now());
+                                      if (refCode === null) return; // User cancelled
+                                      confirmPassPaymentMutation.mutate({
+                                        id: p.id,
+                                        paymentMethod: 'ONLINE_QR',
+                                        referenceCode: refCode.trim() || 'BANK-TXN-' + Date.now(),
+                                      });
+                                    }}
+                                    className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 text-emerald-700 rounded text-[9px] font-bold transition cursor-pointer"
+                                  >
+                                    Xác nhận CK
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`Bạn có chắc chắn muốn hủy đăng ký vé tháng #${p.id}?`)) {
+                                        cancelPassMutation.mutate(p.id);
+                                      }
+                                    }}
+                                    className="px-2 py-1 bg-rose-50 hover:bg-rose-100 border border-rose-100 text-rose-600 rounded text-[9px] font-bold transition cursor-pointer"
+                                  >
+                                    Hủy Vé
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-normal italic">Đã thanh toán</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+          </div>
+        )}
       </div>
     </div>
+    {/* QR Scanner Modal for Monthly Pass Confirmations */}
+    <QrScannerModal
+      isOpen={isQrScannerOpen}
+      onClose={() => setIsQrScannerOpen(false)}
+      onScanSuccess={handleQrScanSuccess}
+      title="Quét QR Hóa Đơn Vé Tháng Cư Dân"
+    />
       </main>
     </div>
   );

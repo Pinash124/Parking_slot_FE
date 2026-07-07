@@ -311,6 +311,7 @@ export interface VehicleView {
   brand?: string;
   color?: string;
   status?: string;
+  qrCode?: string;
 }
 
 export interface VehicleRequest {

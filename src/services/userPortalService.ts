@@ -128,9 +128,24 @@ export const userPortalService = {
   },
 
   // ========== USER PORTAL NEW PAYMENTS & SERVICES ==========
-  getUserPortalCurrentSession: async (): Promise<CurrentParkingSessionResponse> => {
-    const response = await api.get<CurrentParkingSessionResponse>('/api/user/parking-sessions/current');
-    return response.data;
+  getUserPortalCurrentSession: async (): Promise<CurrentParkingSessionResponse[]> => {
+    const response = await api.get<any[]>('/api/user/parking-sessions/current');
+    return response.data.map(item => ({
+      sessionId: item.session.id,
+      ticketCode: item.session.ticketCode,
+      status: item.session.status,
+      slotCode: item.session.slotCode,
+      zoneName: item.session.zoneName,
+      vehicleTypeName: item.session.vehicleTypeName,
+      licensePlate: item.session.licensePlate,
+      entryTime: item.session.entryTime,
+      estimatedFee: item.estimatedGrandTotal || (item.temporaryQuote?.totalFee) || 0,
+      additionalServices: item.additionalServices?.map((svc: any) => ({
+        serviceId: svc.serviceId,
+        serviceName: svc.serviceName,
+        price: svc.unitPrice || svc.price || 0,
+      })) || [],
+    }));
   },
 
   addUserPortalService: async (payload: { sessionId: number; serviceId: number }): Promise<CurrentParkingSessionResponse> => {
@@ -174,11 +189,6 @@ export const userPortalService = {
 
   prepareMonthlyPassOnlinePayment: async (id: number): Promise<any> => {
     const response = await api.post<any>(`/api/user/monthly-passes/${id}/payment/online-qr`);
-    return response.data;
-  },
-
-  prepareMonthlyPassCashBill: async (id: number): Promise<any> => {
-    const response = await api.post<any>(`/api/user/monthly-passes/${id}/payment/cash-bill`);
     return response.data;
   },
 };

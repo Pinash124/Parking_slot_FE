@@ -1,31 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { authService } from '../services/authService';
-import { parkingService } from '../services/parkingService';
 import { userPortalService } from '../services/userPortalService';
+import { parkingService } from '../services/parkingService';
 import type {
   FeedbackCreateRequest,
 } from '../types/parking';
 
 export default function DriverDashboard() {
-  const queryClient = useQueryClient();
   const currentUser = authService.getCurrentUser();
-  const [activeTab, setActiveTab] = useState<'info' | 'ticket' | 'feedback'>('ticket'); // Default to ticket to show session
-
-  // Additional states for services and QR modal
-  const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [personalQrData, setPersonalQrData] = useState<{ qrCodeUrl: string; transferDescription: string; amount: number } | null>(null);
-  const [showPersonalQrModal, setShowPersonalQrModal] = useState(false);
-  const [copiedDescription, setCopiedDescription] = useState(false);
-
-    // Stats / Live Slots Query (using public info)
-  const { data: stats } = useQuery({
-    queryKey: ['facilityInfo'],
-    queryFn: () => parkingService.getFacilityInfo(),
-    refetchInterval: 15000,
-  });
+  const [activeTab, setActiveTab] = useState<'info' | 'ticket' | 'feedback'>('ticket');
+  const [activeSessionIndex, setActiveSessionIndex] = useState(0);
 
   // Load pricing policies for rates view
   const { data: pricingPolicies = [] } = useQuery({
@@ -33,79 +20,28 @@ export default function DriverDashboard() {
     queryFn: () => userPortalService.getPricingPolicies(),
   });
 
-  // Current active session query pointing to user-portal endpoint
-  const { data: currentSession } = useQuery({
+  // Current active sessions query - returns array of active sessions
+  const { data: currentSessions = [] } = useQuery({
     queryKey: ['currentSession'],
     queryFn: () => userPortalService.getUserPortalCurrentSession(),
     refetchInterval: 10000,
     retry: false,
   });
 
-  
+  // Select session by index
+  const currentSession = Array.isArray(currentSessions)
+    ? currentSessions[activeSessionIndex] ?? null
+    : (currentSessions as any) ?? null;
 
-  
+  // Keep index in bounds when sessions array shrinks
+  useEffect(() => {
+    const len = Array.isArray(currentSessions) ? currentSessions.length : 0;
+    if (len > 0 && activeSessionIndex >= len) {
+      setActiveSessionIndex(len - 1);
+    }
+  }, [currentSessions, activeSessionIndex]);
 
-  
-
-  
-
-  // --- MUTATIONS ---
-  
-
-  
-
-  
-
-  // VNPAY redirect mutation
-  const checkoutMutation = useMutation({
-    mutationFn: async ({ sessionId, amount }: { sessionId: number; amount: number }) => {
-      const res = await parkingService.createVnpayPayment({
-        sessionId,
-        amount,
-        returnUrl: window.location.origin + '/customer/payment-return',
-        orderInfo: `Thanh toan ve xe cho phien do #${sessionId}`
-      });
-      if (res.paymentUrl) {
-        // Direct redirect for better user flow
-        window.location.href = res.paymentUrl;
-      } else {
-        alert('Không thể tạo liên kết thanh toán VNPay.');
-      }
-      return res;
-    },
-    onError: (err: any) => alert('Lỗi thanh toán VNPay: ' + (err.response?.data?.message || err.message)),
-  });
-
-  // Personal QR payment mutation
-  const personalQrMutation = useMutation({
-    mutationFn: (payload: { sessionId: number; amount: number }) =>
-      userPortalService.createPersonalQrPayment(payload),
-    onSuccess: (data) => {
-      setPersonalQrData(data);
-      setShowPersonalQrModal(true);
-    },
-    onError: (err: any) => {
-      alert('Lỗi tạo mã QR chuyển khoản: ' + (err.response?.data?.message || err.message));
-    },
-  });
-
-  // Add service mutation
-  const addServiceMutation = useMutation({
-    mutationFn: (serviceId: number) =>
-      userPortalService.addUserPortalService({
-        sessionId: currentSession?.sessionId!,
-        serviceId,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['currentSession'] });
-      alert('Đăng ký thêm dịch vụ bổ sung thành công!');
-      setSelectedServiceId('');
-    },
-    onError: (err: any) => {
-      alert('Lỗi khi thêm dịch vụ: ' + (err.response?.data?.message || err.message));
-    },
-  });
-
+  // Feedback mutation
   const submitFeedbackMutation = useMutation({
     mutationFn: (payload: FeedbackCreateRequest) => parkingService.submitFeedback(payload),
     onSuccess: () => {
@@ -115,11 +51,7 @@ export default function DriverDashboard() {
     onError: (err: any) => alert('Lỗi khi gửi phản hồi: ' + (err.response?.data?.message || err.message)),
   });
 
-  
-
-  
-
-  // --- FEEDBACK ---
+  // Feedback state
   const [feedbackCategory, setFeedbackCategory] = useState('OTHER');
   const [feedbackContent, setFeedbackContent] = useState('');
 
@@ -130,11 +62,9 @@ export default function DriverDashboard() {
     const interval = setInterval(() => {
       const entryDate = new Date(currentSession.entryTime!);
       const diffMs = Date.now() - entryDate.getTime();
-      
       const hours = Math.floor(diffMs / (3600 * 1000));
       const mins = Math.floor((diffMs % (3600 * 1000)) / (60 * 1000));
       const secs = Math.floor((diffMs % (60 * 1000)) / 1000);
-
       const hStr = hours < 10 ? '0' + hours : hours;
       const mStr = mins < 10 ? '0' + mins : mins;
       const sStr = secs < 10 ? '0' + secs : secs;
@@ -143,7 +73,7 @@ export default function DriverDashboard() {
     return () => clearInterval(interval);
   }, [currentSession]);
 
-      const handleFeedbackSubmit = (e: React.FormEvent) => {
+  const handleFeedbackSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!feedbackContent) return;
     submitFeedbackMutation.mutate({
@@ -153,25 +83,7 @@ export default function DriverDashboard() {
     });
   };
 
-  const handleAddService = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedServiceId) {
-      alert('Vui lòng chọn dịch vụ muốn thêm.');
-      return;
-    }
-    addServiceMutation.mutate(parseInt(selectedServiceId, 10));
-  };
-
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedDescription(true);
-    setTimeout(() => setCopiedDescription(false), 2000);
-  };
-
-  const availableSlots = stats?.availableSlots ?? 0;
-  const occupiedSlots = stats?.occupiedSlots ?? 0;
-  const totalSlots = availableSlots + occupiedSlots;
-  const fillRate = totalSlots === 0 ? 0 : Math.round((occupiedSlots * 100) / totalSlots);
+  const sessionsArr = Array.isArray(currentSessions) ? currentSessions : [];
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased">
@@ -183,16 +95,16 @@ export default function DriverDashboard() {
           <div>
             <h2 className="text-2xl md:text-3xl font-extrabold tracking-tight">Xin chào, {currentUser?.username || 'Khách hàng'}!</h2>
             <p className="mt-1.5 text-blue-100 text-sm max-w-xl">
-              Cổng thông tin lái xe cá nhân. Đặt chỗ trước, nhận vé điện tử, thanh toán và gửi phản hồi bãi đỗ xe tức thời.
+              Cổng thông tin lái xe cá nhân. Đặt chỗ trước, nhận vé điện tử và gửi phản hồi bãi đỗ xe tức thời.
             </p>
           </div>
-          <div className="bg-white/10 backdrop-blur-md px-4.5 py-3 rounded-2xl border border-white/10 flex items-center space-x-3 text-sm">
+          <div className="bg-white/10 backdrop-blur-md px-4 py-3 rounded-2xl border border-white/10 flex items-center space-x-3 text-sm">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
             <span className="font-bold">Bãi đỗ xe hoạt động 24/7</span>
           </div>
         </div>
 
-        {/* Tab Selection Navigation */}
+        {/* Tab Navigation */}
         <div className="flex border-b border-slate-200 mb-6 overflow-x-auto space-x-2 pb-1 scrollbar-none">
           <button
             onClick={() => setActiveTab('ticket')}
@@ -201,7 +113,7 @@ export default function DriverDashboard() {
             }`}
           >
             Lượt đỗ xe hiện tại (Vé xe)
-            {currentSession && (
+            {sessionsArr.length > 0 && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
             )}
           </button>
@@ -212,10 +124,10 @@ export default function DriverDashboard() {
               activeTab === 'info' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Bãi Xe & Bảng Giá
+            Bãi Xe &amp; Bảng Giá
           </button>
 
-                    <button
+          <button
             onClick={() => setActiveTab('feedback')}
             className={`flex items-center px-4 py-3 rounded-xl text-sm font-bold transition whitespace-nowrap cursor-pointer ${
               activeTab === 'feedback' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-500 hover:text-slate-800'
@@ -227,9 +139,30 @@ export default function DriverDashboard() {
 
         {/* Tab: Active Session (Ticket) */}
         {activeTab === 'ticket' && (
-          <div className="max-w-4xl mx-auto space-y-6">
-            {!currentSession ? (
-              <div className="bg-white border border-slate-200 p-12 rounded-3xl shadow-sm text-center space-y-6 max-w-md mx-auto">
+          <div className="max-w-2xl mx-auto space-y-6">
+            {/* Multi-vehicle switcher (only when > 1 parked vehicle) */}
+            {sessionsArr.length > 1 && (
+              <div className="flex gap-2 pb-1 overflow-x-auto scrollbar-none">
+                {sessionsArr.map((sess: any, index: number) => (
+                  <button
+                    key={sess.sessionId ?? index}
+                    onClick={() => setActiveSessionIndex(index)}
+                    className={`px-4 py-2 rounded-2xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 shrink-0 border ${
+                      activeSessionIndex === index
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/20'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${sess.status === 'ACTIVE' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+                    <span>{sess.licensePlate || `Vé #${sess.sessionId}`}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {sessionsArr.length === 0 ? (
+              /* No active session */
+              <div className="bg-white border border-slate-200 p-12 rounded-3xl shadow-sm text-center space-y-6">
                 <div className="w-16 h-16 bg-slate-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
                   <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
@@ -237,12 +170,11 @@ export default function DriverDashboard() {
                 </div>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-800">Không có lượt đỗ xe hoạt động</h3>
-                  <p className="text-xs text-slate-450 mt-1 max-w-xs mx-auto leading-relaxed">
+                  <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto leading-relaxed">
                     Hiện bạn không có xe đỗ tại hầm hoặc chưa có phiên đỗ nào được kích hoạt. Hãy đăng ký đặt lịch giữ chỗ trước để tiết kiệm thời gian!
                   </p>
                 </div>
-
-                <div className="pt-2 flex flex-col space-y-3.5 w-full">
+                <div className="pt-2 w-full">
                   <Link
                     to="/customer/reservations"
                     className="w-full py-3 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 active:scale-98 text-white rounded-2xl text-xs font-extrabold transition shadow-md shadow-indigo-600/10 cursor-pointer inline-block text-center"
@@ -250,292 +182,150 @@ export default function DriverDashboard() {
                     Đặt lịch giữ chỗ đỗ xe &rarr;
                   </Link>
                 </div>
-
-
               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                {/* Session Card Info */}
-                <div className="lg:col-span-2 bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-                  <div className="bg-slate-50/50 p-6 border-b border-dashed border-slate-200 text-center relative flex flex-col items-center justify-center">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vé Xe Điện Tử</p>
-                    <h4 className="text-2xl font-black text-indigo-600 mt-1">{currentSession.ticketCode}</h4>
-                    <p className="text-[10px] text-slate-450 mt-0.5">Trạng thái: <span className="font-extrabold uppercase text-indigo-600">{currentSession.status}</span></p>
-                    {currentSession.licensePlate && (
-                      <div className="mt-4 bg-white border border-slate-200 p-2.5 rounded-2xl shadow-sm w-32 h-32 flex items-center justify-center animate-in zoom-in-95 duration-200">
-                        <img
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(currentSession.licensePlate)}`}
-                          alt="Vehicle QR Ticket"
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
-                    )}
+            ) : currentSession ? (
+              /* Electronic Ticket Card - centered */
+              <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
+                {/* Ticket Header with QR */}
+                <div className="bg-gradient-to-b from-indigo-50 to-white p-6 border-b border-dashed border-slate-200 text-center flex flex-col items-center">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Vé Xe Điện Tử</p>
+                  <h4 className="text-2xl font-black text-indigo-600">{currentSession.ticketCode ?? '—'}</h4>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Trạng thái: <span className="font-extrabold uppercase text-emerald-600">{currentSession.status ?? '—'}</span>
+                  </p>
+
+                  {/* QR code showing license plate */}
+                  <div className="mt-4 bg-white border-2 border-indigo-100 p-3 rounded-2xl shadow-md w-36 h-36 flex items-center justify-center animate-in zoom-in-95 duration-200">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(currentSession.licensePlate ?? '')}`}
+                      alt="Vehicle QR"
+                      className="w-full h-full object-contain"
+                    />
                   </div>
-
-                  <div className="p-6 space-y-5 text-xs font-medium">
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400">Biển số xe:</span>
-                      <span className="font-bold text-slate-900 text-sm">{currentSession.licensePlate || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400">Phân loại xe:</span>
-                      <span className="font-semibold text-slate-750">{currentSession.vehicleTypeName || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400">Vị trí đỗ (Slot):</span>
-                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2.5 py-0.5 rounded-lg border border-indigo-100">{currentSession.slotCode || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400">Khu vực đỗ (Zone):</span>
-                      <span className="font-semibold text-slate-700">{currentSession.zoneName || 'N/A'}</span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400">Thời điểm vào bãi:</span>
-                      <span className="font-semibold text-slate-750">
-                        {currentSession.entryTime ? new Date(currentSession.entryTime).toLocaleString('vi-VN') : 'N/A'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center py-1 border-b border-slate-50">
-                      <span className="text-slate-400">Thời gian đỗ:</span>
-                      <span className="font-bold text-slate-800 font-mono tracking-wide">{liveDurationStr}</span>
-                    </div>
-
-                    {/* Additional Services List */}
-                    {currentSession.additionalServices && currentSession.additionalServices.length > 0 && (
-                      <div className="py-2 border-b border-slate-50 space-y-2">
-                        <span className="text-slate-400 block mb-1">Dịch vụ bổ sung đã đăng ký:</span>
-                        <div className="space-y-1.5">
-                          {currentSession.additionalServices.map((svc: any, idx: number) => (
-                            <div key={idx} className="flex justify-between items-center bg-indigo-50/30 p-2.5 rounded-xl border border-indigo-50/50 text-[11px] font-semibold text-indigo-950">
-                              <span>✨ {svc.serviceName || `Dịch vụ #${svc.serviceId}`}</span>
-                              <span>{Number(svc.price).toLocaleString('vi-VN')}đ</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Select Form to Add Add-on Services */}
-                    <div className="pt-2">
-                      <form onSubmit={handleAddService} className="flex items-center space-x-2.5">
-                        <div className="flex-1">
-                          <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-1">
-                            Chọn dịch vụ bổ sung
-                          </label>
-                          <select
-                            value={selectedServiceId}
-                            onChange={(e) => setSelectedServiceId(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-[11px] font-bold focus:outline-none"
-                          >
-                            <option value="">-- Chọn Dịch Vụ --</option>
-                            <option value="1">Rửa xe hút bụi ngoại thất (+50.000đ)</option>
-                            <option value="2">Vệ sinh khoang máy chi tiết (+100.000đ)</option>
-                            <option value="3">Bơm lốp & Đo áp suất tự động (+15.000đ)</option>
-                          </select>
-                        </div>
-                        <button
-                          type="submit"
-                          disabled={addServiceMutation.isPending}
-                          className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-100 rounded-xl text-xs font-bold cursor-pointer transition self-end disabled:opacity-50"
-                        >
-                          {addServiceMutation.isPending ? 'Đang thêm...' : '+ Thêm'}
-                        </button>
-                      </form>
-                    </div>
-
-                    <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                      <span className="text-slate-500 font-bold text-sm">Tổng phí tạm tính:</span>
-                      <span className="text-2xl font-black text-indigo-600">{(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ</span>
-                    </div>
-                  </div>
+                  <p className="text-[9px] text-slate-400 mt-2 font-medium">Quét để xác nhận biển số xe</p>
                 </div>
 
-                {/* Right Column: Checkout Payment Options */}
-                <div className="lg:col-span-1 space-y-6">
-                  {currentSession.status === 'PAYMENT_PENDING' || currentSession.status === 'COMPLETED' ? (
-                    <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm text-center space-y-5">
-                      <div className="w-12 h-12 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center justify-center mx-auto text-emerald-500">
-                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-extrabold text-slate-800">ĐÃ HOÀN TẤT THANH TOÁN</h4>
-                        <p className="text-[10px] text-slate-450 mt-1">Barrier cổng ra sẽ tự động mở khi xe của bạn di chuyển tới khu vực camera quét biển số.</p>
-                      </div>
-                      
-                      {/* Exit QR for safety backup */}
-                      <div className="bg-slate-50 border border-slate-200 p-4.5 rounded-2xl inline-block w-full">
-                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">QR quét cổng ra dự phòng</p>
-                        <div className="w-28 h-28 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-1 mx-auto shadow-sm animate-in zoom-in-95 duration-200">
-                          <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(currentSession.licensePlate || '')}`}
-                            alt="Exit QR Code"
-                            className="w-full h-full object-contain"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
-                      <h4 className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">Thanh Toán Trực Tuyến</h4>
-                      <p className="text-[10px] text-slate-400">Chọn một trong hai hình thức thanh toán trực tiếp để thanh toán hóa đơn lượt đỗ:</p>
+                {/* Ticket Details */}
+                <div className="p-6 space-y-4 text-xs font-medium">
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                    <span className="text-slate-500">Biển số xe</span>
+                    <span className="font-black text-slate-900 text-base tracking-wider">{currentSession.licensePlate ?? 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                    <span className="text-slate-500">Phân loại xe</span>
+                    <span className="font-semibold text-slate-700">{currentSession.vehicleTypeName ?? 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                    <span className="text-slate-500">Vị trí đỗ (Slot)</span>
+                    <span className="font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100">
+                      {currentSession.slotCode ?? 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                    <span className="text-slate-500">Khu vực (Zone)</span>
+                    <span className="font-semibold text-slate-700">{currentSession.zoneName ?? 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                    <span className="text-slate-500">Thời điểm vào bãi</span>
+                    <span className="font-semibold text-slate-700">
+                      {currentSession.entryTime
+                        ? new Date(currentSession.entryTime).toLocaleString('vi-VN')
+                        : 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-b border-slate-100">
+                    <span className="text-slate-500">Thời gian đỗ</span>
+                    <span className="font-bold text-slate-800 font-mono tracking-wide text-sm">{liveDurationStr}</span>
+                  </div>
 
-                      {/* Payment Choice Card 1: VNPAY */}
-                      <button
-                        onClick={() => checkoutMutation.mutate({ sessionId: currentSession.sessionId, amount: currentSession.estimatedFee || 0 })}
-                        disabled={checkoutMutation.isPending}
-                        className="w-full text-left p-4.5 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/5 transition cursor-pointer flex items-start space-x-3 group"
-                      >
-                        <div className="w-10 h-10 bg-indigo-50 group-hover:bg-indigo-100 rounded-xl flex items-center justify-center font-black text-indigo-600 shrink-0 text-sm">
-                          VN
-                        </div>
-                        <div>
-                          <span className="font-extrabold text-slate-800 text-xs block group-hover:text-indigo-600 transition">Cổng VNPAY Gateway</span>
-                          <span className="text-[9px] text-slate-450 mt-0.5 block leading-normal">Thanh toán qua ví điện tử, thẻ ATM nội địa, hoặc thẻ quốc tế Visa/MasterCard.</span>
-                        </div>
-                      </button>
-
-                      {/* Payment Choice Card 2: Personal QR */}
-                      <button
-                        onClick={() => personalQrMutation.mutate({ sessionId: currentSession.sessionId, amount: currentSession.estimatedFee || 0 })}
-                        disabled={personalQrMutation.isPending}
-                        className="w-full text-left p-4.5 rounded-2xl border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/5 transition cursor-pointer flex items-start space-x-3 group"
-                      >
-                        <div className="w-10 h-10 bg-emerald-50 group-hover:bg-emerald-100 rounded-xl flex items-center justify-center font-bold text-emerald-650 shrink-0 text-xs">
-                          QR
-                        </div>
-                        <div>
-                          <span className="font-extrabold text-slate-800 text-xs block group-hover:text-emerald-650 transition">Chuyển khoản QR cá nhân</span>
-                          <span className="text-[9px] text-slate-450 mt-0.5 block leading-normal">Quét mã chuyển khoản nhanh nội bộ. Xác nhận tức thời.</span>
-                        </div>
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex justify-between items-center pt-3 border-t-2 border-indigo-100">
+                    <span className="text-slate-600 font-bold text-sm">Phí tạm tính</span>
+                    <span className="text-2xl font-black text-indigo-600">
+                      {(currentSession.estimatedFee ?? 0).toLocaleString('vi-VN')}đ
+                    </span>
+                  </div>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
         )}
 
-        {/* Tab 2: Info */}
+        {/* Tab: Info & Pricing */}
         {activeTab === 'info' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex items-center">
-                  <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2"></span>
-                  Thời Gian Hoạt Động & Xe Hỗ Trợ
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="flex items-start space-x-3.5">
-                    <div className="p-2.5 bg-slate-100 rounded-xl text-slate-650">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm">Thời gian phục vụ</h4>
-                      <p className="text-xs text-slate-450 mt-0.5 leading-relaxed">Chúng tôi mở cửa đón phương tiện gửi 24 giờ một ngày, 7 ngày một tuần kể cả ngày nghỉ lễ.</p>
-                    </div>
+          <div className="max-w-4xl mx-auto space-y-6">
+            {/* Operating hours & supported vehicles */}
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+              <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex items-center">
+                <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full mr-2"></span>
+                Thời Gian Hoạt Động &amp; Xe Hỗ Trợ
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="flex items-start space-x-3.5">
+                  <div className="p-2.5 bg-slate-100 rounded-xl text-slate-600 shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                   </div>
-
-                  <div className="flex items-start space-x-3.5">
-                    <div className="p-2.5 bg-slate-100 rounded-xl text-slate-650">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-800 text-sm">Các loại xe hỗ trợ gửi</h4>
-                      <p className="text-xs text-slate-450 mt-0.5 leading-relaxed">Hầm đỗ hỗ trợ các phương tiện Xe Máy, Ô Tô Con dưới 9 chỗ và Xe Đạp Điện.</p>
-                    </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">Thời gian phục vụ</h4>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">Chúng tôi mở cửa đón phương tiện gửi 24 giờ một ngày, 7 ngày một tuần kể cả ngày nghỉ lễ.</p>
                   </div>
                 </div>
-              </div>
-
-              {/* Pricing table */}
-              <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
-                <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex items-center">
-                  <span className="w-2.5 h-2.5 bg-purple-600 rounded-full mr-2"></span>
-                  Bảng Giá Gửi Xe Hiện Tại
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                        <th className="pb-3 pr-4">Loại xe</th>
-                        <th className="pb-3 px-4 text-right">Phí theo giờ (1h đầu)</th>
-                        <th className="pb-3 px-4 text-right">Phí theo ngày (24h)</th>
-                        <th className="pb-3 pl-4 text-right">Mất thẻ/Vé phạt</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
-                      {pricingPolicies.map((policy) => (
-                        <tr key={policy.id} className="hover:bg-slate-50/50 transition">
-                          <td className="py-3.5 pr-4 text-slate-900 font-bold">{policy.vehicleTypeName || 'N/A'}</td>
-                          <td className="py-3.5 px-4 text-right text-indigo-600">{(policy.hourlyRate ?? 0).toLocaleString()}đ</td>
-                          <td className="py-3.5 px-4 text-right text-indigo-600">{(policy.dailyRate ?? 0).toLocaleString()}đ</td>
-                          <td className="py-3.5 pl-4 text-right text-rose-600">{(policy.lostTicketFee ?? 0).toLocaleString()}đ</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="flex items-start space-x-3.5">
+                  <div className="p-2.5 bg-slate-100 rounded-xl text-slate-600 shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm">Các loại xe hỗ trợ gửi</h4>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">Hầm đỗ hỗ trợ các phương tiện Xe Máy, Ô Tô Con dưới 9 chỗ và Xe Đạp Điện.</p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Parking live slots info */}
-            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-800 mb-1">Công Suất Hầm Đỗ Xe</h3>
-                <p className="text-slate-400 text-xs mb-4">Số liệu trực quan về số chỗ đỗ trống hiện thời</p>
-                
-                <div className="relative pt-1 mb-4">
-                  <div className="flex mb-2 items-center justify-between text-xs">
-                    <span className="text-slate-450 font-bold">Tỉ lệ lấp đầy hầm:</span>
-                    <span className="font-extrabold text-indigo-600">{fillRate}%</span>
-                  </div>
-                  <div className="overflow-hidden h-2.5 text-xs flex rounded-full bg-slate-100 border border-slate-200">
-                    <div
-                      style={{ width: `${fillRate}%` }}
-                      className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-indigo-600 transition-all duration-500"
-                    ></div>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-xs font-semibold">
-                  <div className="flex justify-between py-1.5 border-b border-slate-50">
-                    <span className="text-slate-400">Tổng chỗ đỗ:</span>
-                    <span className="text-slate-800">{totalSlots} chỗ</span>
-                  </div>
-                  <div className="flex justify-between py-1.5 border-b border-slate-50">
-                    <span className="text-slate-400">Đã đỗ (Bận):</span>
-                    <span className="text-indigo-600">{occupiedSlots} chỗ</span>
-                  </div>
-                  <div className="flex justify-between py-1.5">
-                    <span className="text-slate-400">Còn trống:</span>
-                    <span className="text-emerald-600 font-bold">{availableSlots} chỗ</span>
-                  </div>
-                </div>
+            {/* Pricing table */}
+            <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
+              <h3 className="text-lg font-bold text-slate-800 mb-4 border-b border-slate-200 pb-3 flex items-center">
+                <span className="w-2.5 h-2.5 bg-purple-600 rounded-full mr-2"></span>
+                Bảng Giá Gửi Xe Hiện Tại
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                      <th className="pb-3 pr-4">Loại xe</th>
+                      <th className="pb-3 px-4 text-right">Phí theo giờ (1h đầu)</th>
+                      <th className="pb-3 px-4 text-right">Phí theo ngày (24h)</th>
+                      <th className="pb-3 pl-4 text-right">Mất thẻ/Vé phạt</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
+                    {pricingPolicies.map((policy) => (
+                      <tr key={policy.id} className="hover:bg-slate-50/50 transition">
+                        <td className="py-3.5 pr-4 text-slate-900 font-bold">{policy.vehicleTypeName || 'N/A'}</td>
+                        <td className="py-3.5 px-4 text-right text-indigo-600">{(policy.hourlyRate ?? 0).toLocaleString()}đ</td>
+                        <td className="py-3.5 px-4 text-right text-indigo-600">{(policy.dailyRate ?? 0).toLocaleString()}đ</td>
+                        <td className="py-3.5 pl-4 text-right text-rose-600">{(policy.lostTicketFee ?? 0).toLocaleString()}đ</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
 
-        {/* Tab 3: Booking Form */}
-
-
-        {/* Tab 4: Feedback Form */}
+        {/* Tab: Feedback Form */}
         {activeTab === 'feedback' && (
           <div className="max-w-xl mx-auto bg-white border border-slate-200 p-6 rounded-2xl shadow-sm">
             <h3 className="text-base font-bold text-slate-800 pb-3 border-b border-slate-100 mb-5">
-              Gửi ý kiến đóng góp & Phản hồi
+              Gửi ý kiến đóng góp &amp; Phản hồi
             </h3>
-            
             <form onSubmit={handleFeedbackSubmit} className="space-y-4 text-xs font-semibold">
               <div>
-                <label className="block text-slate-450 mb-1.5 uppercase tracking-wide">Chủ đề phản hồi</label>
+                <label className="block text-slate-500 mb-1.5 uppercase tracking-wide">Chủ đề phản hồi</label>
                 <select
                   value={feedbackCategory}
                   onChange={(e) => setFeedbackCategory(e.target.value)}
@@ -547,9 +337,8 @@ export default function DriverDashboard() {
                   <option value="OTHER">Chủ đề khác</option>
                 </select>
               </div>
-
               <div>
-                <label className="block text-slate-450 mb-1.5 uppercase tracking-wide">Nội dung chi tiết</label>
+                <label className="block text-slate-500 mb-1.5 uppercase tracking-wide">Nội dung chi tiết</label>
                 <textarea
                   required
                   rows={4}
@@ -559,11 +348,10 @@ export default function DriverDashboard() {
                   placeholder="Vui lòng nhập chi tiết sự việc, vị trí đỗ xe hoặc ý kiến đóng góp của bạn để chúng tôi phục vụ tốt hơn..."
                 />
               </div>
-
               <button
                 type="submit"
                 disabled={submitFeedbackMutation.isPending}
-                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-md disabled:opacity-50"
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition shadow-md disabled:opacity-50 cursor-pointer"
               >
                 {submitFeedbackMutation.isPending ? 'Đang gửi...' : 'Gửi Phản Hồi Ngay'}
               </button>
@@ -571,80 +359,6 @@ export default function DriverDashboard() {
           </div>
         )}
       </main>
-
-      {/* PERSONAL QR MODAL */}
-      {showPersonalQrModal && personalQrData && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 cursor-default" onClick={() => setShowPersonalQrModal(false)}></div>
-          
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-sm w-full p-6 shadow-2xl relative z-10 text-center animate-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-center pb-3 border-b border-slate-100 mb-4">
-              <h3 className="font-bold text-slate-800 text-sm">Chuyển khoản QR cá nhân</h3>
-              <button
-                onClick={() => setShowPersonalQrModal(false)}
-                className="text-slate-400 hover:text-slate-650 p-1.5 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* QR Image Display */}
-            <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl inline-block mb-4">
-              {personalQrData.qrCodeUrl ? (
-                <img
-                  src={personalQrData.qrCodeUrl}
-                  alt="Mã QR chuyển khoản cá nhân"
-                  className="w-44 h-44 mx-auto rounded-xl shadow-sm"
-                />
-              ) : (
-                <div className="w-44 h-44 bg-slate-200 rounded-xl flex items-center justify-center text-xs text-slate-400 font-bold mx-auto">
-                  QR Code Placeholder
-                </div>
-              )}
-            </div>
-
-            {/* Amount details */}
-            <div className="mb-4">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Số tiền cần chuyển</span>
-              <span className="text-xl font-black text-indigo-600 mt-1 block">
-                {Number(personalQrData.amount).toLocaleString('vi-VN')}đ
-              </span>
-            </div>
-
-            {/* Transfer Description */}
-            <div className="text-left bg-slate-50 border border-slate-200 rounded-2xl p-4.5 mb-5 relative">
-              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nội dung chuyển khoản</span>
-              <div className="flex items-center justify-between">
-                <span className="font-mono font-bold text-xs text-slate-800 break-all select-all">
-                  {personalQrData.transferDescription}
-                </span>
-                <button
-                  onClick={() => copyToClipboard(personalQrData.transferDescription)}
-                  className="text-indigo-600 hover:text-indigo-700 text-xs font-bold shrink-0 ml-3 cursor-pointer"
-                >
-                  {copiedDescription ? 'Đã sao chép!' : 'Sao chép'}
-                </button>
-              </div>
-            </div>
-
-            <p className="text-[10px] text-slate-400 leading-normal mb-5">
-              Sau khi quét mã và chuyển tiền thành công, hệ thống sẽ đối soát tự động và hoàn tất phiên đỗ của bạn trong 1-2 phút.
-            </p>
-
-            <button
-              onClick={() => {
-                setShowPersonalQrModal(false);
-                queryClient.invalidateQueries({ queryKey: ['currentSession'] });
-              }}
-              className="w-full py-2.5 bg-slate-850 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer transition active:scale-98"
-            >
-              Tôi đã chuyển khoản xong
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

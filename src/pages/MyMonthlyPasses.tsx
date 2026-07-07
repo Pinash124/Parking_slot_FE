@@ -45,6 +45,15 @@ export default function MyMonthlyPasses() {
   const selectedVehicle = vehicles.find((v) => v.id === parseInt(vehicleId, 10));
   const selectedVehicleTypeId = selectedVehicle?.vehicleTypeId;
 
+  // Filter vehicles to only show cars
+  const carVehicles = vehicles.filter(
+    (v: any) =>
+      v.vehicleTypeName?.toLowerCase().includes('car') ||
+      v.vehicleTypeName?.toLowerCase().includes('ô tô') ||
+      v.vehicleTypeName?.toLowerCase().includes('4 bánh') ||
+      v.vehicleTypeId === 1
+  );
+
   // Available Slots query based on selected vehicle type (purpose=MONTHLY)
   const { data: availableSlots = [], isLoading: isLoadingSlots } = useQuery({
     queryKey: ['availableSlotsForMonthly', selectedVehicleTypeId],
@@ -85,16 +94,7 @@ export default function MyMonthlyPasses() {
     },
   });
 
-  const prepareCashPaymentMutation = useMutation({
-    mutationFn: (id: number) => userPortalService.prepareMonthlyPassCashBill(id),
-    onSuccess: (data) => {
-      setPaymentInstruction(data);
-      setShowPaymentModal(true);
-    },
-    onError: (err: any) => {
-      showToast(err.response?.data?.message || err.message || 'Lỗi chuẩn bị hóa đơn tiền mặt.', 'error');
-    },
-  });
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,6 +167,25 @@ export default function MyMonthlyPasses() {
           <p className="text-slate-450 text-xs mt-1">Đăng ký dịch vụ vé tháng cho xe cư dân để ra vào tự động và miễn phí cước lượt gửi.</p>
         </div>
 
+        {/* Expiry Reminders Banner */}
+        {passes.some((p: any) => p.expiryReminderDue) && (
+          <div className="mb-6 p-4.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3.5 text-xs text-amber-855 animate-in fade-in duration-200">
+            <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="space-y-1">
+              <h4 className="font-bold text-amber-900">Nhắc nhở gia hạn vé tháng cư dân:</h4>
+              <ul className="list-disc list-inside space-y-1 font-semibold">
+                {passes
+                  .filter((p: any) => p.expiryReminderDue && p.expiryReminderMessage)
+                  .map((p: any) => (
+                    <li key={p.id}>{p.expiryReminderMessage}</li>
+                  ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
         {/* Layout split */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           
@@ -176,9 +195,9 @@ export default function MyMonthlyPasses() {
               Đăng ký vé tháng mới
             </h3>
 
-            {vehicles.length === 0 ? (
+            {carVehicles.length === 0 ? (
               <div className="text-center py-6 space-y-3">
-                <p className="text-xs text-slate-450">Bạn cần có phương tiện đã đăng ký trước khi làm vé tháng.</p>
+                <p className="text-xs text-slate-450">Bạn cần có phương tiện (ô tô) đã đăng ký trước khi làm vé tháng.</p>
                 <a
                   href="/customer/vehicles"
                   className="inline-block px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold rounded-xl border border-indigo-100 transition"
@@ -200,7 +219,7 @@ export default function MyMonthlyPasses() {
                     required
                   >
                     <option value="">-- Chọn xe --</option>
-                    {vehicles.map((v) => (
+                    {carVehicles.map((v) => (
                       <option key={v.id} value={v.id}>
                         {v.plateNumber} - {v.brand} ({v.color})
                       </option>
@@ -351,18 +370,12 @@ export default function MyMonthlyPasses() {
                             </td>
                             <td className="py-4 pl-4 text-right">
                               {isPendingPayment ? (
-                                <div className="flex flex-col sm:flex-row justify-end gap-1.5">
+                                <div className="flex justify-end">
                                   <button
                                     onClick={() => prepareOnlinePaymentMutation.mutate(p.id)}
-                                    className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-100 transition cursor-pointer"
+                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer shadow-sm shadow-indigo-600/10 active:scale-98"
                                   >
                                     QR Online
-                                  </button>
-                                  <button
-                                    onClick={() => prepareCashPaymentMutation.mutate(p.id)}
-                                    className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-[10px] font-bold rounded-lg border border-slate-200 transition cursor-pointer"
-                                  >
-                                    Tiền mặt
                                   </button>
                                 </div>
                               ) : (
@@ -422,24 +435,8 @@ export default function MyMonthlyPasses() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                <p className="text-xs font-semibold text-slate-650">
-                  Hóa đơn đăng ký vé tháng đã được tạo. Hãy mang hóa đơn này đến quầy lễ tân hoặc bàn kiểm soát để thanh toán bằng tiền mặt:
-                </p>
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 font-mono text-[10px] whitespace-pre-wrap text-slate-700 leading-relaxed max-h-60 overflow-y-auto">
-                  {paymentInstruction.billContent}
-                </div>
-                <div className="text-center">
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(paymentInstruction.billContent);
-                      showToast('Đã sao chép nội dung hóa đơn!', 'success');
-                    }}
-                    className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold rounded-xl border border-indigo-100 transition cursor-pointer"
-                  >
-                    Sao chép hóa đơn
-                  </button>
-                </div>
+              <div className="text-center py-6 text-xs text-rose-500 font-bold">
+                Phương thức thanh toán không hợp lệ hoặc đã bị hủy bỏ.
               </div>
             )}
           </div>

@@ -24,6 +24,7 @@ export default function ParkingSessions() {
   const [ticketCode, setTicketCode] = useState('');
   const [entryGateCode, setEntryGateCode] = useState('GATE_IN_01');
   const [reservationId, setReservationId] = useState<number | null>(null);
+  const [vehicleId, setVehicleId] = useState<number | null>(null);
   const [reservationData, setReservationData] = useState<any | null>(null);
   const [checkInMsg, setCheckInMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -87,7 +88,7 @@ export default function ParkingSessions() {
 
   // Check-in Mutation
   const checkInMutation = useMutation({
-    mutationFn: (payload: { licensePlate: string; slotId: number; ticketCode?: string; reservationId?: number }) =>
+    mutationFn: (payload: { licensePlate: string; slotId: number; ticketCode?: string; reservationId?: number; vehicleId?: number }) =>
       parkingService.staffCheckIn(entryGateCode, payload),
     onSuccess: (res) => {
       setCheckInMsg({
@@ -99,6 +100,7 @@ export default function ParkingSessions() {
       setSelectedSlotId(null);
       setSelectedSlotCode('');
       setReservationId(null);
+      setVehicleId(null);
       setReservationData(null);
       refetchActiveSessions();
       refetchAllSessions();
@@ -366,23 +368,79 @@ export default function ParkingSessions() {
       alert('Vui lòng nhập biển số xe và chọn vị trí ô đỗ.');
       return;
     }
+    const cleanPlate = licensePlate.toUpperCase().trim();
+    if (cleanPlate.length > 20) {
+      alert('Lỗi: Biển số xe không được dài quá 20 ký tự. Vui lòng kiểm tra lại mã QR hoặc biển số đã nhập.');
+      return;
+    }
     checkInMutation.mutate({
-      licensePlate: licensePlate.toUpperCase().trim(),
+      licensePlate: cleanPlate,
       slotId: selectedSlotId,
       ticketCode: ticketCode.trim() || undefined,
       reservationId: reservationId || undefined,
+      vehicleId: vehicleId || undefined,
     });
+  };
+
+  // Load reservation details and pre-fill form
+  const loadReservation = async (resId: number) => {
+    try {
+      const reservationsPage = await parkingService.searchReservations({ status: 'APPROVED', size: 50 });
+      const allReservations = reservationsPage?.content || [];
+      const matchedRes = allReservations.find((r: any) => r.id === resId);
+      if (matchedRes && matchedRes.status?.toUpperCase() === 'APPROVED') {
+        setReservationData(matchedRes);
+        setReservationId(matchedRes.id);
+        setLicensePlate(matchedRes.licensePlate || '');
+        if (matchedRes.reservedSlotId) {
+          setSelectedSlotId(matchedRes.reservedSlotId);
+          setSelectedSlotCode(matchedRes.reservedSlotCode || '');
+        }
+      } else {
+        alert(`Không tìm thấy đặt chỗ được phê duyệt có mã: #${resId}`);
+      }
+    } catch (err: any) {
+      alert('Lỗi khi tải thông tin đặt chỗ: ' + (err.response?.data?.message || err.message));
+    }
   };
 
   // QR code scan handler
   const handleQrScanSuccess = (decodedText: string) => {
     setIsQrScannerOpen(false);
-    const cleaned = decodedText.trim().toUpperCase();
+    const cleaned = decodedText.trim();
     if (qrPurpose === 'search') {
-      setGateSearchQuery(cleaned);
-      handleValidateGate(undefined, cleaned);
+      setGateSearchQuery(cleaned.toUpperCase());
+      handleValidateGate(undefined, cleaned.toUpperCase());
     } else {
-      setLicensePlate(cleaned);
+      if (cleaned.toUpperCase().startsWith('VEHICLE|')) {
+        const parts = cleaned.split('|');
+        let parsedPlate = '';
+        let parsedVehicleId: number | null = null;
+        
+        parts.forEach(part => {
+          const trimmedPart = part.trim();
+          const upperPart = trimmedPart.toUpperCase();
+          if (upperPart.startsWith('VEHICLEID=')) {
+            parsedVehicleId = parseInt(trimmedPart.substring('vehicleId='.length), 10);
+          } else if (upperPart.startsWith('PLATE=')) {
+            parsedPlate = trimmedPart.substring('plate='.length).toUpperCase();
+          }
+        });
+        
+        if (parsedPlate) {
+          setLicensePlate(parsedPlate);
+        }
+        if (parsedVehicleId) {
+          setVehicleId(parsedVehicleId);
+        }
+      } else if (/^\d+$/.test(cleaned)) {
+        const resId = parseInt(cleaned, 10);
+        loadReservation(resId);
+      } else {
+        setLicensePlate(cleaned.toUpperCase());
+        setVehicleId(null);
+        setReservationId(null);
+      }
     }
   };
 
@@ -689,7 +747,10 @@ export default function ParkingSessions() {
                         <input
                           type="text"
                           value={licensePlate}
-                          onChange={(e) => setLicensePlate(e.target.value)}
+                          onChange={(e) => {
+                            setLicensePlate(e.target.value);
+                            setVehicleId(null);
+                          }}
                           placeholder="Nhập biển số..."
                           className="flex-1 bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs uppercase font-extrabold tracking-wider focus:outline-none"
                         />
