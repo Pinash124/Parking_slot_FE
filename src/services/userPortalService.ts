@@ -171,9 +171,18 @@ export const userPortalService = {
     };
   },
 
-  verifyVnpayReturn: async (queryString: string): Promise<{ success: boolean; amount: number; message?: string; transactionId?: string; exitDeadline?: string | null }> => {
-    const response = await api.get<{ success: boolean; amount: number; message?: string; transactionId?: string; exitDeadline?: string | null }>(`/api/payment-gateways/vnpay/return?${queryString}`);
-    return response.data;
+  verifyVnpayReturn: async (queryString: string): Promise<{ success: boolean; amount: number; message?: string; transactionId?: string; exitDeadline?: string | null; referenceCode?: string }> => {
+    const response = await api.get<any>(`/api/payment-gateways/vnpay/return?${queryString}`);
+    const data = response.data;
+    const success = data.status === 'COMPLETED' || data.status === 'SUCCESS' || data.payment?.status === 'COMPLETED';
+    return {
+      success,
+      amount: data.amount || 0,
+      message: data.message,
+      transactionId: data.paymentId?.toString() || data.referenceCode,
+      exitDeadline: data.exitDeadline,
+      referenceCode: data.referenceCode,
+    };
   },
 
   // ========== MONTHLY PASSES ==========
@@ -189,6 +198,11 @@ export const userPortalService = {
 
   prepareMonthlyPassOnlinePayment: async (id: number): Promise<any> => {
     const response = await api.post<any>(`/api/user/monthly-passes/${id}/payment/online-qr`);
+    return response.data;
+  },
+
+  prepareMonthlyPassVnpayPayment: async (id: number): Promise<{ paymentUrl: string }> => {
+    const response = await api.post<any>(`/api/user/monthly-passes/${id}/payment/vnpay`);
     return response.data;
   },
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import { userPortalService } from '../services/userPortalService';
@@ -6,464 +6,461 @@ import { userPortalService } from '../services/userPortalService';
 export default function MyMonthlyPasses() {
   const queryClient = useQueryClient();
 
-  // Custom Toast state
+  // Toast notifications state
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  // Form State
-  const [vehicleId, setVehicleId] = useState('');
-  const [slotId, setSlotId] = useState('');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [months, setMonths] = useState('1');
-  const [note, setNote] = useState('');
+  // Cascading Selection State for Register Form
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
+  const [selectedBuildingId, setSelectedBuildingId] = useState<string>('');
+  const [selectedFloorId, setSelectedFloorId] = useState<string>('');
+  const [selectedZoneId, setSelectedZoneId] = useState<string>('');
+  const [selectedSlotId, setSelectedSlotId] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>(
+    new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0] // Default to tomorrow
+  );
+  const [months, setMonths] = useState<number>(1);
+  const [note, setNote] = useState<string>('');
 
-  // Validations
-  const [vehicleError, setVehicleError] = useState<string | null>(null);
-  const [slotError, setSlotError] = useState<string | null>(null);
-
-  // Payment Instruction state (for QR / Cash modal)
-  const [paymentInstruction, setPaymentInstruction] = useState<any | null>(null);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-
-  // Trigger custom toast
-  const showToast = (message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   // Queries
+  const { data: myVehicles = [] } = useQuery({
+    queryKey: ['myVehicles'],
+    queryFn: () => userPortalService.getUserPortalVehicles(),
+  });
+
   const { data: passes = [], isLoading: isPassesLoading } = useQuery({
     queryKey: ['myMonthlyPasses'],
     queryFn: () => userPortalService.monthlyPasses(),
   });
 
-  const { data: vehicles = [] } = useQuery({
-    queryKey: ['myVehicles'],
-    queryFn: () => userPortalService.getMyVehicles(),
+  const { data: pricingPolicies = [] } = useQuery({
+    queryKey: ['pricingPolicies'],
+    queryFn: () => userPortalService.getPricingPolicies(),
   });
 
-  // Derived Vehicle Type ID
-  const selectedVehicle = vehicles.find((v) => v.id === parseInt(vehicleId, 10));
-  const selectedVehicleTypeId = selectedVehicle?.vehicleTypeId;
+  const { data: buildings = [] } = useQuery({
+    queryKey: ['userBuildings'],
+    queryFn: () => userPortalService.getUserBuildings(),
+  });
 
-  // Filter vehicles to only show cars
-  const carVehicles = vehicles.filter(
-    (v: any) =>
-      v.vehicleTypeName?.toLowerCase().includes('car') ||
-      v.vehicleTypeName?.toLowerCase().includes('ô tô') ||
-      v.vehicleTypeName?.toLowerCase().includes('4 bánh') ||
-      v.vehicleTypeId === 1
+  const { data: floors = [] } = useQuery({
+    queryKey: ['userFloors', selectedBuildingId],
+    queryFn: () => userPortalService.getUserFloors(Number(selectedBuildingId)),
+    enabled: !!selectedBuildingId,
+  });
+
+  const { data: zones = [] } = useQuery({
+    queryKey: ['userZones', selectedFloorId],
+    queryFn: () => userPortalService.getUserZones(Number(selectedFloorId), 'MONTHLY'),
+    enabled: !!selectedFloorId,
+  });
+
+  // Find vehicle type ID of selected vehicle to filter slots
+  const selectedVehicleObj = myVehicles.find((v) => v.id.toString() === selectedVehicleId);
+  const selectedVehicleTypeId = selectedVehicleObj?.vehicleTypeId;
+
+  // Filter out vehicles that already have an active, scheduled or pending payment monthly pass
+  const registeredVehicleIds = passes
+    .filter((p) => ['ACTIVE', 'SCHEDULED', 'PENDING_PAYMENT'].includes(p.status))
+    .map((p) => p.vehicleId);
+
+  const availableVehiclesForPass = myVehicles.filter(
+    (v) => !registeredVehicleIds.includes(v.id)
   );
 
-  // Available Slots query based on selected vehicle type (purpose=MONTHLY)
-  const { data: availableSlots = [], isLoading: isLoadingSlots } = useQuery({
-    queryKey: ['availableSlotsForMonthly', selectedVehicleTypeId],
-    queryFn: () => userPortalService.getAvailableSlots(undefined, selectedVehicleTypeId, 'MONTHLY'),
-    enabled: !!selectedVehicleTypeId,
+  const { data: availableSlots = [] } = useQuery({
+    queryKey: ['availableSlots', selectedZoneId, selectedVehicleTypeId],
+    queryFn: () => userPortalService.getAvailableSlots(Number(selectedZoneId), selectedVehicleTypeId, 'MONTHLY'),
+    enabled: !!selectedZoneId && !!selectedVehicleTypeId,
   });
 
-  // Reset slot when selected vehicle changes
+  // Calculate live price estimation
+  const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
   useEffect(() => {
-    setSlotId('');
-    setSlotError(null);
-  }, [vehicleId]);
+    if (selectedVehicleTypeId && pricingPolicies.length > 0) {
+      const policy = pricingPolicies.find(
+        (p) => p.vehicleTypeId === selectedVehicleTypeId
+      );
+      if (policy && policy.monthlyRate) {
+        setEstimatedPrice(policy.monthlyRate * months);
+      } else {
+        setEstimatedPrice(0);
+      }
+    } else {
+      setEstimatedPrice(0);
+    }
+  }, [selectedVehicleTypeId, months, pricingPolicies]);
+
+  // Helper for toasts
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   // Mutations
-  const registerPassMutation = useMutation({
+  const registerMutation = useMutation({
     mutationFn: (payload: { vehicleId: number; slotId: number; startDate: string; months: number; note: string }) =>
       userPortalService.registerMonthlyPass(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['myMonthlyPasses'] });
-      showToast('Đăng ký vé tháng thành công!', 'success');
-      setVehicleId('');
-      setSlotId('');
+      showToast('Đăng ký vé tháng thành công! Vui lòng hoàn tất thanh toán.', 'success');
+      // Reset form fields
+      setSelectedVehicleId('');
+      setSelectedBuildingId('');
+      setSelectedFloorId('');
+      setSelectedZoneId('');
+      setSelectedSlotId('');
       setNote('');
     },
     onError: (err: any) => {
-      showToast(err.response?.data?.message || err.message || 'Lỗi khi đăng ký vé tháng.', 'error');
+      showToast(err.response?.data?.message || err.message || 'Lỗi đăng ký vé tháng.', 'error');
     },
   });
 
-  const prepareOnlinePaymentMutation = useMutation({
-    mutationFn: (id: number) => userPortalService.prepareMonthlyPassOnlinePayment(id),
+  const payVnpayMutation = useMutation({
+    mutationFn: (id: number) => userPortalService.prepareMonthlyPassVnpayPayment(id),
     onSuccess: (data) => {
-      setPaymentInstruction(data);
-      setShowPaymentModal(true);
+      if (data?.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        showToast('Không lấy được URL thanh toán VNPay.', 'error');
+      }
     },
     onError: (err: any) => {
-      showToast(err.response?.data?.message || err.message || 'Lỗi chuẩn bị thanh toán online.', 'error');
+      showToast(err.response?.data?.message || err.message || 'Lỗi kết nối VNPay.', 'error');
     },
   });
-
 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    let valid = true;
-    if (!vehicleId) {
-      setVehicleError('Vui lòng chọn phương tiện cần đăng ký.');
-      valid = false;
-    } else {
-      setVehicleError(null);
+    if (!selectedVehicleId) {
+      showToast('Vui lòng chọn phương tiện đỗ.', 'error');
+      return;
+    }
+    if (!selectedSlotId) {
+      showToast('Vui lòng chọn vị trí đỗ (ô đỗ).', 'error');
+      return;
+    }
+    if (!startDate) {
+      showToast('Vui lòng chọn ngày bắt đầu.', 'error');
+      return;
     }
 
-    if (!slotId) {
-      setSlotError('Vui lòng chọn vị trí đỗ (ô đỗ).');
-      valid = false;
-    } else {
-      setSlotError(null);
-    }
-
-    if (!valid) return;
-
-    registerPassMutation.mutate({
-      vehicleId: parseInt(vehicleId, 10),
-      slotId: parseInt(slotId, 10),
+    registerMutation.mutate({
+      vehicleId: Number(selectedVehicleId),
+      slotId: Number(selectedSlotId),
       startDate,
-      months: parseInt(months, 10),
-      note: note.trim(),
+      months,
+      note,
     });
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    const s = status?.toUpperCase();
-    switch (s) {
-      case 'ACTIVE':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-100';
-      case 'SCHEDULED':
-        return 'bg-blue-50 text-blue-700 border-blue-100';
-      case 'PENDING_PAYMENT':
-        return 'bg-amber-50 text-amber-700 border-amber-100';
-      case 'CANCELLED':
-        return 'bg-slate-50 text-slate-500 border-slate-200';
-      default:
-        return 'bg-rose-50 text-rose-705 border-rose-100';
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    const s = status?.toUpperCase();
-    switch (s) {
-      case 'ACTIVE':
-        return 'Đang hoạt động';
-      case 'SCHEDULED':
-        return 'Chờ hiệu lực';
-      case 'PENDING_PAYMENT':
-        return 'Chờ thanh toán';
-      case 'CANCELLED':
-        return 'Đã hủy';
-      default:
-        return status || 'Không rõ';
-    }
-  };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased flex flex-col relative">
+    <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased flex flex-col">
       <Header />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full flex flex-col">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Đăng Ký Vé Tháng Cư Dân (Resident Monthly Passes)</h1>
-          <p className="text-slate-450 text-xs mt-1">Đăng ký dịch vụ vé tháng cho xe cư dân để ra vào tự động và miễn phí cước lượt gửi.</p>
+      {/* Toast Alert */}
+      {toast && (
+        <div className={`fixed top-20 right-4 z-50 px-5 py-3 rounded-2xl shadow-xl border text-xs font-bold transition-all duration-300 animate-in slide-in-from-right-4 ${
+          toast.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'
+        }`}>
+          {toast.message}
         </div>
+      )}
 
-        {/* Expiry Reminders Banner */}
-        {passes.some((p: any) => p.expiryReminderDue) && (
-          <div className="mb-6 p-4.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3.5 text-xs text-amber-855 animate-in fade-in duration-200">
-            <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div className="space-y-1">
-              <h4 className="font-bold text-amber-900">Nhắc nhở gia hạn vé tháng cư dân:</h4>
-              <ul className="list-disc list-inside space-y-1 font-semibold">
-                {passes
-                  .filter((p: any) => p.expiryReminderDue && p.expiryReminderMessage)
-                  .map((p: any) => (
-                    <li key={p.id}>{p.expiryReminderMessage}</li>
-                  ))}
-              </ul>
-            </div>
-          </div>
-        )}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Left Column: Register Form */}
+        <div className="lg:col-span-1 bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-6 flex flex-col justify-between self-start">
+          <div>
+            <h2 className="text-lg font-black text-slate-800 tracking-tight pb-3.5 border-b border-slate-100 flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full"></span>
+              <span>Đăng Ký Vé Tháng Cư Dân</span>
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+              Vé tháng giúp cư dân giữ chỗ đỗ xe cố định lâu dài với mức giá ưu đãi, không phát sinh chi phí theo giờ.
+            </p>
 
-        {/* Layout split */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          
-          {/* Column 1: Registration Form */}
-          <div className="lg:col-span-1 bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-5">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pb-3 border-b border-slate-100">
-              Đăng ký vé tháng mới
-            </h3>
-
-            {carVehicles.length === 0 ? (
-              <div className="text-center py-6 space-y-3">
-                <p className="text-xs text-slate-450">Bạn cần có phương tiện (ô tô) đã đăng ký trước khi làm vé tháng.</p>
-                <a
-                  href="/customer/vehicles"
-                  className="inline-block px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-bold rounded-xl border border-indigo-100 transition"
+            <form onSubmit={handleSubmit} className="space-y-4 text-xs font-semibold mt-5">
+              {/* Select Vehicle */}
+              <div>
+                <label className="block text-slate-500 mb-1">1. Chọn xe đăng ký</label>
+                <select
+                  required
+                  value={selectedVehicleId}
+                  onChange={(e) => {
+                    setSelectedVehicleId(e.target.value);
+                    setSelectedSlotId(''); // Reset slot cascade
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none"
                 >
-                  Đăng ký xe ngay
-                </a>
+                  <option value="">-- Chọn xe của bạn --</option>
+                  {availableVehiclesForPass.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.plateNumber} ({v.vehicleTypeName || 'N/A'})
+                    </option>
+                  ))}
+                </select>
               </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-4 text-xs font-semibold" noValidate>
-                {/* Vehicle Selector */}
+
+              {/* Cascading Infrastructure Choices */}
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-slate-450 mb-1.5 uppercase">Chọn phương tiện *</label>
+                  <label className="block text-slate-500 mb-1">Tòa nhà</label>
                   <select
-                    value={vehicleId}
-                    onChange={(e) => setVehicleId(e.target.value)}
-                    className={`w-full bg-slate-50 border ${
-                      vehicleError ? 'border-rose-500' : 'border-slate-200 focus:border-indigo-500'
-                    } rounded-xl px-4 py-2.5 text-xs focus:outline-none`}
-                    required
+                    value={selectedBuildingId}
+                    onChange={(e) => {
+                      setSelectedBuildingId(e.target.value);
+                      setSelectedFloorId('');
+                      setSelectedZoneId('');
+                      setSelectedSlotId('');
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none"
                   >
-                    <option value="">-- Chọn xe --</option>
-                    {carVehicles.map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.plateNumber} - {v.brand} ({v.color})
+                    <option value="">-- Tòa nhà --</option>
+                    {buildings.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
                       </option>
                     ))}
                   </select>
-                  {vehicleError && <p className="mt-1 text-[10px] text-rose-500 font-medium">{vehicleError}</p>}
                 </div>
 
-                {/* Slot Selector */}
                 <div>
-                  <label className="block text-slate-450 mb-1.5 uppercase">Chọn ô đỗ xe tháng *</label>
+                  <label className="block text-slate-500 mb-1">Tầng hầm</label>
                   <select
-                    value={slotId}
-                    onChange={(e) => setSlotId(e.target.value)}
-                    disabled={!vehicleId || isLoadingSlots}
-                    className={`w-full bg-slate-50 border ${
-                      slotError ? 'border-rose-500' : 'border-slate-200 focus:border-indigo-500'
-                    } rounded-xl px-4 py-2.5 text-xs focus:outline-none disabled:opacity-50`}
-                    required
+                    disabled={!selectedBuildingId}
+                    value={selectedFloorId}
+                    onChange={(e) => {
+                      setSelectedFloorId(e.target.value);
+                      setSelectedZoneId('');
+                      setSelectedSlotId('');
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none disabled:opacity-50"
                   >
-                    <option value="">
-                      {!vehicleId
-                        ? '-- Chọn phương tiện trước --'
-                        : isLoadingSlots
-                        ? '-- Đang tải vị trí đỗ --'
-                        : availableSlots.length === 0
-                        ? '-- Không có ô đỗ trống --'
-                        : '-- Chọn ô đỗ cư dân --'}
-                    </option>
-                    {availableSlots.map((s: any) => (
-                      <option key={s.slotId} value={s.slotId}>
-                        {s.slotCode} - Khu {s.zoneName} ({s.floorName})
+                    <option value="">-- Tầng --</option>
+                    {floors.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.floorName}
                       </option>
                     ))}
                   </select>
-                  {slotError && <p className="mt-1 text-[10px] text-rose-500 font-medium">{slotError}</p>}
-                  {vehicleId && !isLoadingSlots && availableSlots.length === 0 && (
-                    <p className="mt-1 text-[10px] text-rose-500 font-medium">
-                      Không còn chỗ đỗ tháng trống nào cho loại xe này.
-                    </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-500 mb-1">Phân khu (Zone)</label>
+                  <select
+                    disabled={!selectedFloorId}
+                    value={selectedZoneId}
+                    onChange={(e) => {
+                      setSelectedZoneId(e.target.value);
+                      setSelectedSlotId('');
+                    }}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none disabled:opacity-50"
+                  >
+                    <option value="">-- Phân khu --</option>
+                    {zones.map((z) => (
+                      <option key={z.id} value={z.id}>
+                        {z.zoneName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-slate-500 mb-1">Vị trí đỗ (Slot)</label>
+                  <select
+                    disabled={!selectedZoneId || !selectedVehicleId}
+                    value={selectedSlotId}
+                    onChange={(e) => setSelectedSlotId(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none disabled:opacity-50"
+                  >
+                    <option value="">-- Ô đỗ --</option>
+                    {availableSlots.map((s) => (
+                      <option key={s.slotId} value={s.slotId}>
+                        {s.slotCode}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedZoneId && availableSlots.length === 0 && (
+                    <span className="text-[9px] text-rose-500 block mt-1 font-normal">Hết vị trí trống phù hợp loại xe.</span>
                   )}
                 </div>
+              </div>
 
-                {/* Start Date */}
+              {/* Start Date & Duration */}
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-slate-450 mb-1.5 uppercase">Ngày bắt đầu hiệu lực *</label>
+                  <label className="block text-slate-500 mb-1">Ngày bắt đầu</label>
                   <input
                     type="date"
                     required
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-xs focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none"
                   />
                 </div>
 
-                {/* Duration Months */}
                 <div>
-                  <label className="block text-slate-450 mb-1.5 uppercase">Thời hạn đăng ký *</label>
+                  <label className="block text-slate-500 mb-1">Thời hạn đăng ký</label>
                   <select
                     value={months}
-                    onChange={(e) => setMonths(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-xs focus:outline-none"
+                    onChange={(e) => setMonths(Number(e.target.value))}
+                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2.5 text-slate-800 focus:outline-none"
                   >
-                    <option value="1">1 Tháng</option>
-                    <option value="3">3 Tháng (Tiết kiệm 5%)</option>
-                    <option value="6">6 Tháng (Tiết kiệm 10%)</option>
-                    <option value="12">12 Tháng (Tiết kiệm 15%)</option>
+                    <option value={1}>1 Tháng</option>
+                    <option value={3}>3 Tháng (Giảm 5%)</option>
+                    <option value={6}>6 Tháng (Giảm 10%)</option>
+                    <option value={12}>12 Tháng (Giảm 15%)</option>
                   </select>
                 </div>
+              </div>
 
-                {/* Note */}
-                <div>
-                  <label className="block text-slate-450 mb-1.5 uppercase">Ghi chú thêm</label>
-                  <textarea
-                    rows={3}
-                    placeholder="Ví dụ: Cư dân căn hộ A.1205..."
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-xs focus:outline-none font-sans"
-                  />
+              {/* Note */}
+              <div>
+                <label className="block text-slate-500 mb-1">Ghi chú (Note)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Ghi chú thêm..."
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-sans"
+                />
+              </div>
+
+              {/* Live Cost estimation */}
+              {estimatedPrice > 0 && (
+                <div className="p-3 bg-indigo-50 border border-indigo-100 rounded-2xl flex justify-between items-center text-xs animate-in fade-in duration-200">
+                  <span className="text-slate-500 font-bold">Tổng chi phí dự kiến:</span>
+                  <span className="font-mono text-indigo-700 font-black text-sm">
+                    {estimatedPrice.toLocaleString('vi-VN')}đ
+                  </span>
                 </div>
+              )}
 
-                <button
-                  type="submit"
-                  disabled={registerPassMutation.isPending}
-                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-sm active:scale-98"
-                >
-                  {registerPassMutation.isPending ? 'Đang gửi yêu cầu...' : 'Đăng Ký Vé Tháng'}
-                </button>
-              </form>
-            )}
+              <button
+                type="submit"
+                disabled={registerMutation.isPending}
+                className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold cursor-pointer transition shadow-md shadow-indigo-100 active:scale-98"
+              >
+                {registerMutation.isPending ? 'Đang tạo đăng ký...' : 'Xác Nhận Đăng Ký'}
+              </button>
+            </form>
           </div>
+        </div>
 
-          {/* Column 2 & 3: Passes History List */}
-          <div className="lg:col-span-2 bg-white border border-slate-200 p-6 rounded-3xl shadow-sm min-h-[450px]">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest pb-3 border-b border-slate-100 mb-6">
-              Danh sách vé tháng của bạn
-            </h3>
+        {/* Right Column: List of Monthly Passes */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+            <h2 className="text-lg font-black text-slate-800 tracking-tight pb-3.5 border-b border-slate-100 flex justify-between items-center">
+              <span>Vé Tháng Của Tôi</span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-md">
+                {passes.length} Vé đăng ký
+              </span>
+            </h2>
 
             {isPassesLoading ? (
-              <div className="flex flex-col items-center justify-center py-20">
-                <span className="w-8 h-8 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span>
-                <p className="text-xs text-slate-400 font-semibold mt-3">Đang tải thông tin vé tháng...</p>
+              <div className="text-center py-20 text-slate-400 text-xs">Đang tải danh sách vé tháng của bạn...</div>
+            ) : passes.length === 0 ? (
+              <div className="text-center py-20 border-2 border-dashed border-slate-150 rounded-2xl text-slate-400 text-xs leading-relaxed">
+                <svg className="w-8 h-8 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Bạn chưa đăng ký vé tháng nào.<br />Hãy điền thông tin ở khung bên trái để tiến hành đăng ký giữ chỗ.
               </div>
             ) : (
-              passes.length === 0 ? (
-                <div className="text-slate-400 text-center py-20 text-xs">Bạn chưa có đăng ký thẻ vé tháng nào.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase text-[10px] tracking-wider">
-                        <th className="pb-3.5 pr-4">Mã vé</th>
-                        <th className="pb-3.5 px-4">Biển số</th>
-                        <th className="pb-3.5 px-4">Vị trí</th>
-                        <th className="pb-3.5 px-4">Hiệu lực</th>
-                        <th className="pb-3.5 px-4 text-right">Tổng phí</th>
-                        <th className="pb-3.5 px-4 text-center">Trạng thái</th>
-                        <th className="pb-3.5 pl-4 text-right">Thao tác</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
-                      {passes.map((p: any) => {
-                        const startStr = p.startDate ? new Date(p.startDate).toLocaleDateString('vi-VN') : '—';
-                        const endStr = p.endDate ? new Date(p.endDate).toLocaleDateString('vi-VN') : '—';
-                        const isPendingPayment = p.status?.toUpperCase() === 'PENDING_PAYMENT';
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {passes.map((p: any) => {
+                  const isUnpaid = p.paymentStatus?.toUpperCase() !== 'PAID';
+                  const isPending = p.status?.toUpperCase() === 'PENDING_PAYMENT';
+                  const expiryDays = p.daysUntilExpiry;
 
-                        return (
-                          <tr key={p.id} className="hover:bg-slate-50/50 transition">
-                            <td className="py-4 pr-4 font-mono text-slate-800">#{p.id}</td>
-                            <td className="py-4 px-4 font-mono text-indigo-950 font-black tracking-wide">
-                              {p.licensePlate || `Xe #${p.vehicleId}`}
-                            </td>
-                            <td className="py-4 px-4 text-slate-600 font-bold">
-                              {p.slotCode || `Slot #${p.slotId}`}
-                            </td>
-                            <td className="py-4 px-4 text-slate-500 font-mono text-[10px] leading-relaxed">
-                              <div>Từ: {startStr}</div>
-                              <div>Đến: {endStr}</div>
-                            </td>
-                            <td className="py-4 px-4 text-right text-indigo-600 font-mono font-bold">
-                              {Number(p.totalAmount || p.price || 0).toLocaleString('vi-VN')}đ
-                            </td>
-                            <td className="py-4 px-4 text-center">
-                              <span className={`px-2 py-0.5 rounded-[5px] text-[9px] font-bold border uppercase ${getStatusBadgeClass(p.status)}`}>
-                                {getStatusLabel(p.status)}
-                              </span>
-                            </td>
-                            <td className="py-4 pl-4 text-right">
-                              {isPendingPayment ? (
-                                <div className="flex justify-end">
-                                  <button
-                                    onClick={() => prepareOnlinePaymentMutation.mutate(p.id)}
-                                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-xl transition cursor-pointer shadow-sm shadow-indigo-600/10 active:scale-98"
-                                  >
-                                    QR Online
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className="text-slate-300 font-normal italic text-[10px]">Đã xử lý</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )
+                  return (
+                    <div key={p.id} className="border border-slate-200 rounded-2xl p-4.5 bg-slate-50/30 flex flex-col justify-between space-y-4 hover:border-slate-300 transition">
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] font-bold font-mono text-slate-400 block">MÃ ĐĂNG KÝ #{p.id}</span>
+                            <span className="font-mono font-black text-slate-900 text-sm uppercase block mt-0.5">{p.licensePlate}</span>
+                            <span className="text-[9px] text-slate-450 block font-normal">{p.vehicleTypeName}</span>
+                          </div>
+                          
+                          {/* Badge Status */}
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold border uppercase tracking-wide ${
+                            p.status === 'ACTIVE'
+                              ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                              : p.status === 'SCHEDULED'
+                              ? 'bg-blue-50 border-blue-100 text-blue-700'
+                              : p.status === 'PENDING_PAYMENT'
+                              ? 'bg-amber-50 border-amber-100 text-amber-700'
+                              : 'bg-slate-100 border-slate-200 text-slate-500'
+                          }`}>
+                            {p.status === 'ACTIVE' ? 'Đang hoạt động' : (p.status === 'PENDING_PAYMENT' ? 'Chờ thanh toán' : p.status)}
+                          </span>
+                        </div>
+
+                        {/* Validity Dates */}
+                        <div className="bg-white border border-slate-100 p-2.5 rounded-xl text-[10px] space-y-1 font-semibold text-slate-500">
+                          <div className="flex justify-between">
+                            <span>Vị trí cố định:</span>
+                            <strong className="text-slate-800">{p.slotCode || 'N/A'}</strong>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Ngày bắt đầu:</span>
+                            <span className="font-mono text-slate-700">{p.startDate ? new Date(p.startDate).toLocaleDateString('vi-VN') : '—'}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Ngày hết hạn:</span>
+                            <span className="font-mono text-slate-700">{p.endDate ? new Date(p.endDate).toLocaleDateString('vi-VN') : '—'}</span>
+                          </div>
+                          {p.status === 'ACTIVE' && expiryDays !== null && expiryDays <= 7 && (
+                            <div className="pt-1.5 border-t border-slate-100 text-[9px] text-rose-500 font-bold animate-pulse">
+                              Còn {expiryDays} ngày là hết hạn vé!
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expiry / Price Info & Action */}
+                      <div className="flex flex-col gap-2 pt-2 border-t border-slate-100/70">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] text-slate-450 font-bold">Tổng số tiền:</span>
+                          <strong className="font-mono text-indigo-650 text-sm">
+                            {Number(p.totalAmount || 0).toLocaleString('vi-VN')}đ
+                          </strong>
+                        </div>
+
+                        {isUnpaid && isPending ? (
+                          <div className="mt-1">
+                            <button
+                              onClick={() => payVnpayMutation.mutate(p.id)}
+                              disabled={payVnpayMutation.isPending}
+                              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-bold transition flex items-center justify-center space-x-1 shadow-sm cursor-pointer"
+                            >
+                              <span>Thanh toán VNPay</span>
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="bg-emerald-50/50 border border-emerald-100/60 p-2 rounded-xl text-center text-[10px] font-bold text-emerald-800 flex items-center justify-center space-x-1.5 mt-1">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                            </svg>
+                            <span>Đã thanh toán ({p.paymentMethod || 'BANK_TRANSFER'})</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
       </main>
-
-      {/* Payment Instruction Modal */}
-      {showPaymentModal && paymentInstruction && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="absolute inset-0 cursor-default" onClick={() => setShowPaymentModal(false)}></div>
-          <div className="bg-white border border-slate-200 rounded-3xl p-6.5 max-w-md w-full shadow-2xl relative z-10 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
-              <h3 className="text-base font-extrabold text-slate-800">
-                Thanh toán vé tháng #{paymentInstruction.pass?.id}
-              </h3>
-              <button
-                onClick={() => setShowPaymentModal(false)}
-                className="text-slate-400 hover:text-slate-650 p-1.5 hover:bg-slate-100 rounded-lg transition cursor-pointer"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {paymentInstruction.paymentMethod === 'ONLINE_QR' ? (
-              <div className="text-center space-y-4">
-                <p className="text-xs font-semibold text-slate-650">
-                  Vui lòng quét mã QR dưới đây hoặc chuyển khoản chính xác số tiền sau để thanh toán vé tháng:
-                </p>
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-150 inline-block font-mono text-xs font-bold text-slate-800">
-                  Số tiền: {Number(paymentInstruction.amount).toLocaleString('vi-VN')} VND
-                </div>
-
-                <div className="w-48 h-48 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-2 mx-auto shadow-sm">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(paymentInstruction.qrContent)}`}
-                    alt="VietQR Monthly Pass"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-
-                <p className="text-[10px] text-slate-450 leading-relaxed max-w-xs mx-auto">
-                  Sau khi quét và chuyển khoản thành công, hệ thống hoặc Ban quản lý sẽ xác thực giao dịch để kích hoạt vé của bạn.
-                </p>
-              </div>
-            ) : (
-              <div className="text-center py-6 text-xs text-rose-500 font-bold">
-                Phương thức thanh toán không hợp lệ hoặc đã bị hủy bỏ.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Toast popup */}
-      {toast && (
-        <div
-          className={`fixed bottom-5 right-5 z-[60] flex items-center space-x-3 px-5 py-3 rounded-2xl shadow-xl border animate-in slide-in-from-bottom-5 duration-300 ${
-            toast.type === 'success'
-              ? 'bg-emerald-500 text-white border-emerald-600'
-              : 'bg-rose-500 text-white border-rose-600'
-          }`}
-        >
-          {toast.type === 'success' ? (
-            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-          )}
-          <span className="text-xs font-bold tracking-tight">{toast.message}</span>
-        </div>
-      )}
     </div>
   );
 }

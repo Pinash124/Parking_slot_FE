@@ -115,7 +115,11 @@ export default function PaymentReturn() {
 
                 <div>
                   <h3 className="text-xl font-extrabold text-white">Thanh toán thành công!</h3>
-                  <p className="text-xs text-slate-400 mt-1">Hóa đơn gửi xe của bạn đã được đối soát hoàn tất</p>
+                  <p className="text-xs text-slate-400 mt-1">
+                    {result.referenceCode?.toUpperCase().startsWith('MTHVNPAY')
+                      ? 'Đăng ký / Gia hạn vé tháng cư dân đã được đối soát thành công!'
+                      : 'Hóa đơn gửi xe của bạn đã được đối soát hoàn tất'}
+                  </p>
                 </div>
 
                 {/* Receipt Details */}
@@ -125,38 +129,40 @@ export default function PaymentReturn() {
                     <span className="font-mono font-bold text-slate-300">{result.transactionId || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between items-center py-1">
-                    <span className="text-slate-500 font-bold">Số tiền đã trả:</span>
+                    <span className="text-slate-500 font-bold font-mono">Số tiền đã trả:</span>
                     <span className="text-sm font-extrabold text-emerald-400">
                       {result.amount ? Number(result.amount).toLocaleString('vi-VN') : '0'}đ
                     </span>
                   </div>
                 </div>
 
-                {/* Exit Gate Deadline Section */}
-                <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-6 space-y-4">
-                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest block">
-                    Thời gian giới hạn xe ra cổng
-                  </span>
-                  
-                  {secondsLeft !== null ? (
-                    <div className="text-4xl font-black font-mono tracking-wider text-indigo-300">
-                      {formatTime(secondsLeft)}
-                    </div>
-                  ) : (
-                    <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto"></div>
-                  )}
+                {/* Exit Gate Deadline Section (Only for standard sessions, NOT for monthly passes) */}
+                {!result.referenceCode?.toUpperCase().startsWith('MTHVNPAY') && (
+                  <div className="bg-indigo-500/5 border border-indigo-500/10 rounded-2xl p-6 space-y-4">
+                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest block">
+                      Thời gian giới hạn xe ra cổng
+                    </span>
+                    
+                    {secondsLeft !== null ? (
+                      <div className="text-4xl font-black font-mono tracking-wider text-indigo-300">
+                        {formatTime(secondsLeft)}
+                      </div>
+                    ) : (
+                      <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto"></div>
+                    )}
 
-                  <p className="text-[10px] text-slate-450 leading-relaxed text-center">
-                    <strong className="text-indigo-400">Lưu ý quan trọng:</strong> Bạn có tối đa 15 phút để di chuyển xe qua barrier cổng ra. Nếu quá thời hạn trên, hệ thống sẽ tính thêm phí đỗ xe phát sinh ngoài giờ.
-                  </p>
-                </div>
+                    <p className="text-[10px] text-slate-450 leading-relaxed text-center">
+                      <strong className="text-indigo-400">Lưu ý quan trọng:</strong> Bạn có tối đa 15 phút để di chuyển xe qua barrier cổng ra. Nếu quá thời hạn trên, hệ thống sẽ tính thêm phí đỗ xe phát sinh ngoài giờ.
+                    </p>
+                  </div>
+                )}
 
                 <div className="pt-4">
                   <Link
-                    to="/customer"
+                    to={result.referenceCode?.toUpperCase().startsWith('MTHVNPAY') ? '/customer/monthly-passes' : '/customer'}
                     className="w-full inline-flex items-center justify-center px-6 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/35 transition transform hover:-translate-y-0.5 cursor-pointer"
                   >
-                    Về Trang chủ Portal
+                    {result.referenceCode?.toUpperCase().startsWith('MTHVNPAY') ? 'Xem Vé Tháng Của Tôi' : 'Về Trang chủ Portal'}
                   </Link>
                 </div>
               </div>

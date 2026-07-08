@@ -209,21 +209,32 @@ export default function ParkingSessions() {
     }
   };
 
-  // Bước 2B: Thanh toán chuyển khoản → tạo QR, poll trạng thái
+  // Bước 2B: Thanh toán VNPay → mở link thanh toán, poll trạng thái
   const handleTransferPayment = async () => {
     if (!pendingCheckoutSessionId) return;
     setPaymentProcessing(true);
-    setPaymentMsg({ type: 'info', text: 'Đang tạo mã QR chuyển khoản...' });
+    setPaymentMsg({ type: 'info', text: 'Đang tạo liên kết thanh toán VNPay...' });
     try {
-      const res = await parkingService.createPersonalQrPayment({ sessionId: pendingCheckoutSessionId, amount: pendingCheckoutFee, returnUrl: undefined, orderInfo: `Parking #${pendingCheckoutSessionId}` });
+      const res = await parkingService.createVnpayPayment({
+        sessionId: pendingCheckoutSessionId,
+        amount: pendingCheckoutFee,
+        returnUrl: `${window.location.origin}/customer/payment-return`,
+        orderInfo: `Staff checkout parking session #${pendingCheckoutSessionId}`
+      });
       setTransferInfo(res);
-      setPaymentMsg({ type: 'info', text: 'Quét mã QR để chuyển khoản. Hệ thống tự động mở barrier khi xác nhận thanh toán...' });
+      setPaymentMsg({
+        type: 'info',
+        text: 'Đã mở cổng thanh toán VNPay. Vui lòng nhập mã thẻ test NCB trên cổng VNPay. Hệ thống tự động mở barrier khi thanh toán thành công.'
+      });
+      if (res.paymentUrl) {
+        window.open(res.paymentUrl, '_blank');
+      }
       // Start polling every 3 seconds
       setPaymentPolling(true);
       const pollInterval = setInterval(async () => {
         try {
           const status = await parkingService.getPaymentCheckoutStatus(pendingCheckoutSessionId!);
-          if (status.paid || status.paymentStatus === 'COMPLETED') {
+          if (status.paid || status.paymentStatus === 'COMPLETED' || status.paymentStatus === 'PAID') {
             clearInterval(pollInterval);
             setPaymentPolling(false);
             // Complete exit
@@ -251,7 +262,7 @@ export default function ParkingSessions() {
         }
       }, 600000);
     } catch (err: any) {
-      setPaymentMsg({ type: 'error', text: err.response?.data?.message || err.message || 'Lỗi tạo thanh toán chuyển khoản.' });
+      setPaymentMsg({ type: 'error', text: err.response?.data?.message || err.message || 'Lỗi tạo thanh toán VNPay.' });
     } finally {
       setPaymentProcessing(false);
     }
@@ -1077,26 +1088,39 @@ export default function ParkingSessions() {
                 </div>
               )}
 
-              {/* QR Transfer Info */}
+              {/* VNPay Payment Info */}
               {transferInfo && (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3 text-center">
-                  {transferInfo.qrImageUrl ? (
-                    <img src={transferInfo.qrImageUrl} alt="QR chuyển khoản" className="w-48 h-48 mx-auto rounded-xl border border-slate-200 object-contain" />
-                  ) : (
-                    <div className="w-48 h-48 mx-auto bg-slate-100 rounded-xl border border-dashed border-slate-300 flex items-center justify-center">
-                      <p className="text-xs text-slate-400 font-bold">QR đang tải...</p>
-                    </div>
-                  )}
-                  {transferInfo.transferContent && (
-                    <div className="bg-white border border-slate-200 rounded-lg p-2.5 text-left space-y-1 text-xs">
-                      <p className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">Nội dung chuyển khoản</p>
-                      <p className="font-mono font-black text-slate-800 text-sm">{transferInfo.transferContent}</p>
-                    </div>
-                  )}
-                  {paymentPolling && (
-                    <p className="text-[10px] text-slate-400 font-semibold animate-pulse">
-                      Đang chờ xác nhận thanh toán... Barrier sẽ tự động mở khi nhận tiền.
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
+                    <svg className="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                    </svg>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <p className="text-xs text-slate-500 font-bold">Mã giao dịch VNPay:</p>
+                    <p className="font-mono text-slate-800 text-sm font-extrabold">{transferInfo.referenceCode}</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <a
+                      href={transferInfo.paymentUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-block w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-blue-100 cursor-pointer"
+                    >
+                      Mở lại trang thanh toán VNPay
+                    </a>
+                    <p className="text-[9px] text-slate-400 leading-normal font-medium px-4">
+                      Một cửa sổ thanh toán VNPay đã được mở. Vui lòng nhập số thẻ ATM của ngân hàng NCB test (ví dụ: <strong className="font-mono select-all">970419852613143212</strong>) trên cổng thanh toán.
                     </p>
+                  </div>
+
+                  {paymentPolling && (
+                    <div className="flex items-center justify-center gap-2 pt-2 border-t border-slate-200/60 text-[10px] text-slate-400 font-semibold animate-pulse">
+                      <span className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></span>
+                      <span>Đang chờ khách hàng thanh toán qua VNPay...</span>
+                    </div>
                   )}
                 </div>
               )}
@@ -1122,7 +1146,7 @@ export default function ParkingSessions() {
                     </div>
                   </button>
 
-                  {/* Bank Transfer / QR */}
+                  {/* VNPay Payment Button */}
                   <button
                     type="button"
                     onClick={handleTransferPayment}
@@ -1131,12 +1155,12 @@ export default function ParkingSessions() {
                   >
                     <div className="w-12 h-12 bg-indigo-100 group-hover:bg-indigo-200 rounded-xl flex items-center justify-center transition">
                       <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 20h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                       </svg>
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-extrabold text-indigo-800">Chuyển khoản</p>
-                      <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">Quét mã QR,<br/>tự động mở barrier</p>
+                      <p className="text-sm font-extrabold text-indigo-800">Thẻ / VNPay</p>
+                      <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">Nhập mã thẻ ATM,<br/>tự động mở barrier</p>
                     </div>
                   </button>
                 </div>
