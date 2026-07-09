@@ -93,6 +93,7 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/payment-return" element={<PaymentReturn />} />
 
             {/* Protected customer portal: /customer/* */}
             <Route

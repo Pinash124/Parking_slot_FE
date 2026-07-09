@@ -218,7 +218,7 @@ export default function ParkingSessions() {
       const res = await parkingService.createVnpayPayment({
         sessionId: pendingCheckoutSessionId,
         amount: pendingCheckoutFee,
-        returnUrl: `${window.location.origin}/customer/payment-return`,
+        returnUrl: `${window.location.origin}/payment-return`,
         orderInfo: `Staff checkout parking session #${pendingCheckoutSessionId}`
       });
       setTransferInfo(res);
