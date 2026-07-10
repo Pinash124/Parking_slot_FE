@@ -123,6 +123,15 @@ export const parkingService = {
     return response.data;
   },
 
+  confirmManualPayment: async (paymentId: number, payload: { gateway?: string; referenceCode?: string }): Promise<any> => {
+    const response = await api.patch(`/api/payments/${paymentId}/status`, {
+      status: 'COMPLETED',
+      gateway: payload.gateway || 'PERSONAL_QR',
+      referenceCode: payload.referenceCode,
+    });
+    return response.data;
+  },
+
   // ========== RESERVATIONS ==========
   searchReservations: async (params?: {
     userId?: number;

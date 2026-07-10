@@ -20,6 +20,7 @@ export default function MyMonthlyPasses() {
   );
   const [months, setMonths] = useState<number>(1);
   const [note, setNote] = useState<string>('');
+  const [qrPayment, setQrPayment] = useState<any | null>(null);
 
 
   // Queries
@@ -117,17 +118,19 @@ export default function MyMonthlyPasses() {
     },
   });
 
-  const payVnpayMutation = useMutation({
-    mutationFn: (id: number) => userPortalService.prepareMonthlyPassVnpayPayment(id),
+  const payQrMutation = useMutation({
+    mutationFn: (id: number) => userPortalService.prepareMonthlyPassOnlinePayment(id),
     onSuccess: (data) => {
-      if (data?.paymentUrl) {
-        window.location.href = data.paymentUrl;
+      if (data?.qrImageUrl) {
+        setQrPayment(data);
+        queryClient.invalidateQueries({ queryKey: ['myMonthlyPasses'] });
+        showToast('Da tao QR thanh toan.', 'success');
       } else {
-        showToast('Không lấy được URL thanh toán VNPay.', 'error');
+        showToast('Không lấy được ảnh QR thanh toán.', 'error');
       }
     },
     onError: (err: any) => {
-      showToast(err.response?.data?.message || err.message || 'Lỗi kết nối VNPay.', 'error');
+      showToast(err.response?.data?.message || err.message || 'Lỗi tạo QR thanh toán.', 'error');
     },
   });
 
@@ -167,6 +170,50 @@ export default function MyMonthlyPasses() {
           toast.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-rose-50 border-rose-100 text-rose-800'
         }`}>
           {toast.message}
+        </div>
+      )}
+
+      {qrPayment && (
+        <div className="fixed inset-0 z-50 bg-slate-900/45 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-slate-200 p-5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-base font-black text-slate-900">Quét QR thanh toán</h3>
+                <p className="text-[11px] text-slate-500 mt-1">Mã đăng ký #{qrPayment.pass?.id || ''}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQrPayment(null)}
+                className="w-8 h-8 rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 font-bold"
+                aria-label="Đóng QR thanh toán"
+              >
+                x
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 flex justify-center">
+              <img
+                src={qrPayment.qrImageUrl}
+                alt="QR thanh toán"
+                className="w-56 h-56 object-contain bg-white rounded-xl border border-slate-100"
+              />
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-500 font-bold">Số tiền</span>
+                <strong className="font-mono text-slate-900">{Number(qrPayment.amount || 0).toLocaleString('vi-VN')}đ</strong>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-slate-500 font-bold">Nội dung CK</span>
+                <strong className="font-mono text-indigo-700 text-right break-all">{qrPayment.transferContent || qrPayment.paymentReference}</strong>
+              </div>
+            </div>
+
+            <p className="text-[11px] leading-relaxed text-slate-500 bg-amber-50 border border-amber-100 rounded-xl p-3">
+              Sau khi chuyển khoản, nhân viên sẽ đối chiếu nội dung thanh toán và xác nhận vé tháng cho bạn.
+            </p>
+          </div>
         </div>
       )}
 
@@ -437,11 +484,11 @@ export default function MyMonthlyPasses() {
                         {isUnpaid && isPending ? (
                           <div className="mt-1">
                             <button
-                              onClick={() => payVnpayMutation.mutate(p.id)}
-                              disabled={payVnpayMutation.isPending}
+                              onClick={() => payQrMutation.mutate(p.id)}
+                              disabled={payQrMutation.isPending}
                               className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] font-bold transition flex items-center justify-center space-x-1 shadow-sm cursor-pointer"
                             >
-                              <span>Thanh toán VNPay</span>
+                              <span>{payQrMutation.isPending ? 'Đang tạo QR...' : 'Hiện QR thanh toán'}</span>
                             </button>
                           </div>
                         ) : (

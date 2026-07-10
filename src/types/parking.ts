@@ -509,6 +509,9 @@ export interface PaymentGatewayResponse {
   message: string | null;
   payment: PaymentResponse | null;
   exitDeadline: string | null;
+  qrImageUrl?: string | null;
+  transferContent?: string | null;
+  amount?: number | null;
 }
 
 export interface ParkingFacilityInfoResponse {

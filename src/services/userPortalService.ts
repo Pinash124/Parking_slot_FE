@@ -14,6 +14,11 @@ import type {
   ZoneView,
 } from '../types/parking';
 
+const toAbsoluteAssetUrl = (url?: string | null) => {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${api.defaults.baseURL || 'http://localhost:8080'}${url}`;
+};
+
 export const userPortalService = {
   // ========== VEHICLES ==========
   getMyVehicles: async (): Promise<VehicleView[]> => {
@@ -162,10 +167,8 @@ export const userPortalService = {
       amount: payload.amount,
     });
     const data = response.data;
-    const qrImageUrl = data.qrImageUrl || '';
-    const absoluteQrUrl = qrImageUrl.startsWith('http') ? qrImageUrl : `${api.defaults.baseURL || 'http://localhost:8080'}${qrImageUrl}`;
     return {
-      qrCodeUrl: absoluteQrUrl,
+      qrCodeUrl: toAbsoluteAssetUrl(data.qrImageUrl),
       transferDescription: data.transferContent || data.referenceCode || '',
       amount: data.amount,
     };
@@ -198,7 +201,11 @@ export const userPortalService = {
 
   prepareMonthlyPassOnlinePayment: async (id: number): Promise<any> => {
     const response = await api.post<any>(`/api/user/monthly-passes/${id}/payment/online-qr`);
-    return response.data;
+    const data = response.data;
+    return {
+      ...data,
+      qrImageUrl: toAbsoluteAssetUrl(data.qrImageUrl),
+    };
   },
 
   prepareMonthlyPassVnpayPayment: async (id: number): Promise<{ paymentUrl: string }> => {
