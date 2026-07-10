@@ -204,7 +204,8 @@ export const userPortalService = {
     const data = response.data;
     return {
       ...data,
-      qrImageUrl: toAbsoluteAssetUrl(data.qrImageUrl),
+      qrImageUrl: toAbsoluteAssetUrl(data.qrImageUrl || '/payment/vnpay-personal-qr.png'),
+      transferContent: data.transferContent || data.paymentReference || data.qrContent || '',
     };
   },
 
