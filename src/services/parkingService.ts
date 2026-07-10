@@ -298,8 +298,16 @@ export const parkingService = {
   },
 
   updateSlotStatus: async (id: number, payload: SlotStatusUpdateRequest): Promise<SlotView> => {
-    const response = await api.put<SlotView>(`/api/manager/slots/${id}/status`, payload);
-    return response.data;
+    try {
+      const response = await api.patch<SlotView>(`/api/manager/slots/${id}/status?status=${encodeURIComponent(payload.status)}`);
+      return response.data;
+    } catch (error: any) {
+      if (error?.response?.status === 405) {
+        const fallback = await api.put<SlotView>(`/api/manager/slots/${id}/status`, payload);
+        return fallback.data;
+      }
+      throw error;
+    }
   },
 
   deleteSlot: async (id: number): Promise<void> => {
@@ -343,8 +351,12 @@ export const parkingService = {
   },
 
   // ========== FEEDBACK ==========
-  submitFeedback: async (payload: { sessionId?: number; category?: string; rating?: number; content: string }): Promise<FeedbackResponse> => {
-    const response = await api.post<FeedbackResponse>('/api/feedback', payload);
+  submitFeedback: async (payload: { sessionId?: number; category?: string; feedbackType?: string; rating?: number; content: string }): Promise<FeedbackResponse> => {
+    const { category, feedbackType, ...rest } = payload;
+    const response = await api.post<FeedbackResponse>('/api/feedback', {
+      ...rest,
+      feedbackType: feedbackType || category || 'OTHER',
+    });
     return response.data;
   },
 
@@ -487,8 +499,16 @@ export const parkingService = {
   },
 
   patchManagementSlotStatus: async (id: number, status: string): Promise<SlotView> => {
-    const response = await api.patch<SlotView>(`/api/manager/slots/${id}/status?status=${encodeURIComponent(status)}`);
-    return response.data;
+    try {
+      const response = await api.patch<SlotView>(`/api/manager/slots/${id}/status?status=${encodeURIComponent(status)}`);
+      return response.data;
+    } catch (error: any) {
+      if (error?.response?.status === 405) {
+        const fallback = await api.put<SlotView>(`/api/manager/slots/${id}/status`, { status });
+        return fallback.data;
+      }
+      throw error;
+    }
   },
 
   // ========== ADMIN - PRICING POLICIES NEW ENDPOINTS ==========

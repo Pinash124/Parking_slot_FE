@@ -137,6 +137,8 @@ export const userPortalService = {
     const response = await api.get<any[]>('/api/user/parking-sessions/current');
     return response.data.map(item => ({
       sessionId: item.session.id,
+      reservationId: item.session.reservationId,
+      vehicleId: item.session.vehicleId,
       ticketCode: item.session.ticketCode,
       status: item.session.status,
       slotCode: item.session.slotCode,

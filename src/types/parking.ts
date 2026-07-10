@@ -115,6 +115,8 @@ export interface ParkingSessionResponse {
 // Current parking session response (for user portal)
 export interface CurrentParkingSessionResponse {
   sessionId: number;
+  reservationId?: number | null;
+  vehicleId?: number | null;
   ticketCode: string;
   status: string;
   slotCode?: string;
@@ -285,6 +287,7 @@ export interface PricingRequest {
 export interface FeedbackCreateRequest {
   sessionId?: number;
   category?: string;
+  feedbackType?: string;
   rating?: number;
   content: string;
 }
@@ -295,6 +298,7 @@ export interface FeedbackResponse {
   userFullName?: string;
   sessionId?: number;
   category?: string;
+  feedbackType?: string;
   rating?: number;
   content: string;
   createdAt?: string;

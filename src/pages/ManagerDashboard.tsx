@@ -761,7 +761,7 @@ export default function ManagerDashboard() {
                 <tbody className="divide-y divide-slate-100 text-slate-755">
                   {incidents.map((ex) => (
                     <tr key={ex.id} className="hover:bg-slate-50 transition">
-                      <td className="py-4 font-bold text-slate-800">{ex.licensePlate || `Lượt #${ex.sessionId}`}</td>
+                      <td className="py-4 font-bold text-slate-800">{ex.licensePlate || (ex.sessionId ? `Lượt #${ex.sessionId}` : 'Sự cố chung')}</td>
                       <td className="py-4">
                         <span className="font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100">
                           {ex.incidentType}
@@ -813,9 +813,9 @@ export default function ManagerDashboard() {
                       <h4 className="font-bold text-xs text-slate-800">{fb.userFullName || `Khách hàng #${fb.userId}`}</h4>
                       <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{fb.createdAt ? new Date(fb.createdAt).toLocaleString('vi-VN') : 'N/A'}</p>
                     </div>
-                    {fb.category && (
+                    {(fb.feedbackType || fb.category) && (
                       <span className="text-[10px] font-bold bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded-lg">
-                        {fb.category}
+                        {fb.feedbackType || fb.category}
                       </span>
                     )}
                   </div>

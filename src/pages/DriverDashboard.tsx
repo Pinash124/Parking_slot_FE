@@ -77,7 +77,7 @@ export default function DriverDashboard() {
     e.preventDefault();
     if (!feedbackContent) return;
     submitFeedbackMutation.mutate({
-      category: feedbackCategory,
+      feedbackType: feedbackCategory,
       content: feedbackContent,
       sessionId: currentSession?.sessionId,
     });

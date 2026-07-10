@@ -74,6 +74,7 @@ export default function MyReservations() {
   });
   const reservations = reservationsData?.content || [];
 
+
   // Trigger floor fetch when building changes
   useEffect(() => {
     if (selectedBuildingId) {
@@ -100,7 +101,7 @@ export default function MyReservations() {
       userPortalService.createReservation(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservationsList'] });
-      showToast('Đặt chỗ giữ vị trí đỗ xe thành công!', 'success');
+      showToast('Đặt chỗ giữ suất trong khu thành công!', 'success');
       // Reset form
       setSelectedVehicleId('');
       setSelectedBuildingId('');
@@ -179,6 +180,10 @@ export default function MyReservations() {
     return isValid;
   };
 
+  const toLocalDateTimePayload = (value: string) => {
+    return value.length === 16 ? `${value}:00` : value;
+  };
+
   const handleBookingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -189,8 +194,8 @@ export default function MyReservations() {
     bookingMutation.mutate({
       vehicleId: parseInt(selectedVehicleId, 10),
       zoneId: parseInt(selectedZoneId, 10),
-      startTime: new Date(startTime).toISOString(),
-      endTime: new Date(endTime).toISOString(),
+      startTime: toLocalDateTimePayload(startTime),
+      endTime: toLocalDateTimePayload(endTime),
     });
   };
 
@@ -235,6 +240,46 @@ export default function MyReservations() {
     }
   };
 
+  const isPastReservation = (reservation: any) => {
+    return reservation?.endTime && new Date(reservation.endTime).getTime() < Date.now();
+  };
+
+  const getReservationFailureReason = (reservation: any) => {
+    if (!reservation) return '';
+    const explicitReason = reservation.failureReason || reservation.rejectReason || reservation.rejectionReason || reservation.cancelReason || reservation.reason || reservation.message || reservation.note;
+    if (explicitReason) return explicitReason;
+    return isPastReservation(reservation) ? 'Quá thời gian đặt' : 'Hết chỗ';
+  };
+
+  const getReservationStatusBadgeClass = (reservation: any) => {
+    const s = reservation?.status?.toUpperCase();
+    if (s === 'PENDING') return 'bg-amber-50 text-amber-700 border-amber-100';
+    if (s === 'APPROVED' || s === 'CONFIRMED' || s === 'COMPLETED') {
+      return isPastReservation(reservation)
+        ? 'bg-rose-50 text-rose-700 border-rose-150'
+        : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+    if (s === 'CANCELLED') return 'bg-slate-50 text-slate-500 border-slate-200';
+    if (s === 'REJECTED' || s === 'FAILED' || s === 'FAILURE') return 'bg-rose-50 text-rose-700 border-rose-150';
+    return getStatusBadgeClass(reservation?.status);
+  };
+
+  const getReservationStatusLabel = (reservation: any) => {
+    const s = reservation?.status?.toUpperCase();
+    if (s === 'PENDING') return 'Chờ duyệt';
+    if (s === 'CANCELLED') return 'Đã hủy';
+    if (s === 'APPROVED' || s === 'CONFIRMED' || s === 'COMPLETED') {
+      return isPastReservation(reservation) ? 'Không thành công' : 'Đặt thành công';
+    }
+    if (s === 'REJECTED' || s === 'FAILED' || s === 'FAILURE') return 'Không thành công';
+    return getStatusLabel(reservation?.status || 'Không rõ');
+  };
+
+  const shouldShowFailureReason = (reservation: any) => {
+    const s = reservation?.status?.toUpperCase();
+    return s === 'REJECTED' || s === 'FAILED' || s === 'FAILURE' || ((s === 'APPROVED' || s === 'CONFIRMED' || s === 'COMPLETED') && isPastReservation(reservation));
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased flex flex-col relative">
       <Header />
@@ -244,7 +289,7 @@ export default function MyReservations() {
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Đặt Lịch Giữ Chỗ</h1>
-          <p className="text-slate-450 text-xs mt-1">Đăng ký giữ chỗ trước tại bãi đỗ xe để đảm bảo vị trí trống khi bạn đến nơi</p>
+          <p className="text-slate-450 text-xs mt-1">Đăng ký giữ suất trước trong khu đỗ; ô cụ thể sẽ được hệ thống tự chọn khi xe đến</p>
         </div>
 
         {/* Layout split */}
@@ -463,10 +508,11 @@ export default function MyReservations() {
                     <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
                       {reservations.map((r: any) => {
                         const code = r.ticketCode || `#RSV-${r.id}`;
-                        const isCancellable = r.status?.toUpperCase() === 'PENDING' || r.status?.toUpperCase() === 'APPROVED';
+                        const isExpired = isPastReservation(r);
+                        const isCancellable = (r.status?.toUpperCase() === 'PENDING' || r.status?.toUpperCase() === 'APPROVED') && !isExpired;
                         
                         return (
-                          <tr key={r.id} className={`hover:bg-slate-50/45 transition ${(r.status?.toUpperCase() === 'CONFIRMED' || r.status?.toUpperCase() === 'COMPLETED') ? 'bg-emerald-50/40' : ''}`}>
+                          <tr key={r.id} className={`hover:bg-slate-50/45 transition ${((r.status?.toUpperCase() === 'APPROVED' || r.status?.toUpperCase() === 'CONFIRMED' || r.status?.toUpperCase() === 'COMPLETED') && !isExpired) ? 'bg-emerald-50/40' : ''}`}> 
                             <td className="py-4 pr-4 font-bold text-slate-900 tracking-wide font-mono">
                               {code}
                             </td>
@@ -481,13 +527,20 @@ export default function MyReservations() {
                               <div>Ra: {r.endTime ? new Date(r.endTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</div>
                             </td>
                             <td className="py-4 px-4">
-                              <span className={`px-2 py-0.5 rounded-[6px] text-[9px] font-bold border uppercase tracking-wider ${getStatusBadgeClass(r.status)}`}>
-                                {getStatusLabel(r.status)}
-                              </span>
+                              <div className="inline-flex flex-col items-start gap-1">
+                                <span className={`px-2 py-0.5 rounded-[6px] text-[10px] font-bold border uppercase tracking-wider whitespace-nowrap ${getReservationStatusBadgeClass(r)}`}>
+                                  {getReservationStatusLabel(r)}
+                                </span>
+                                {shouldShowFailureReason(r) && (
+                                  <span className="text-[10px] text-rose-500 font-semibold normal-case">
+                                    Lý do: {getReservationFailureReason(r)}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="py-4 pl-4 text-right space-x-2">
                               {/* Show QR button for APPROVED reservations (not yet checked in) */}
-                              {r.status?.toUpperCase() === 'APPROVED' && (
+                              {r.status?.toUpperCase() === 'APPROVED' && !isExpired && (
                                 <button
                                   type="button"
                                   onClick={() => setSelectedReservationForQr(r)}
@@ -516,8 +569,10 @@ export default function MyReservations() {
                                   Hủy đặt
                                 </button>
                               )}
-                              {r.status?.toUpperCase() === 'CANCELLED' && (
-                                <span className="text-slate-350 text-xs italic font-normal">—</span>
+                              {(r.status?.toUpperCase() === 'CANCELLED' || (r.status?.toUpperCase() === 'APPROVED' && isExpired)) && (
+                                <span className="text-slate-400 text-[10px] italic font-semibold">
+                                  {r.status?.toUpperCase() === 'CANCELLED' ? 'Đã hủy' : 'Không thành công'}
+                                </span>
                               )}
                             </td>
                           </tr>
@@ -591,9 +646,6 @@ export default function MyReservations() {
             {selectedReservationForQr.zoneName && (
               <p className="text-xs text-slate-500 font-semibold mb-2">
                 Khu vực: <span className="text-slate-800 font-bold">{selectedReservationForQr.zoneName}</span>
-                {selectedReservationForQr.reservedSlotCode && (
-                  <> • Ô đỗ: <span className="text-indigo-700 font-bold">{selectedReservationForQr.reservedSlotCode}</span></>
-                )}
               </p>
             )}
 

@@ -88,7 +88,7 @@ export default function ParkingSessions() {
 
   // Check-in Mutation
   const checkInMutation = useMutation({
-    mutationFn: (payload: { licensePlate: string; slotId: number; ticketCode?: string; reservationId?: number; vehicleId?: number }) =>
+    mutationFn: (payload: { licensePlate: string; slotId?: number; ticketCode?: string; reservationId?: number; vehicleId?: number }) =>
       parkingService.staffCheckIn(entryGateCode, payload),
     onSuccess: (res) => {
       setCheckInMsg({
@@ -411,14 +411,8 @@ export default function ParkingSessions() {
         setValidationResult(null);
         setValidationError(null);
         if (autoCheckIn) {
-          const slotId = matchedRes.reservedSlotId || (matchedRes as any).slotId;
-          if (!slotId) {
-            alert('Đặt chỗ này chưa có ô đỗ cố định, không thể tự check-in.');
-            return true;
-          }
           checkInMutation.mutate({
             licensePlate: matchedRes.licensePlate || '',
-            slotId,
             reservationId: matchedRes.id,
             vehicleId: matchedRes.vehicleId,
           });
@@ -633,9 +627,7 @@ export default function ParkingSessions() {
                       <div>Biển số: <strong className="font-mono text-slate-900 uppercase">{reservationData.licensePlate}</strong></div>
                       <div>Mã đặt chỗ: <strong className="font-mono text-violet-800">#{reservationData.id}</strong></div>
                       <div>Khu vực: <strong className="text-slate-800">{reservationData.zoneName || `#${reservationData.zoneId}`}</strong></div>
-                      {reservationData.reservedSlotCode && (
-                        <div>Ô đỗ đặt trước: <strong className="text-indigo-700">{reservationData.reservedSlotCode}</strong></div>
-                      )}
+                      <div>Ô đỗ: <strong className="text-indigo-700">Hệ thống tự chọn khi check-in</strong></div>
                       <div className="col-span-2 text-slate-500 font-normal text-[10px]">
                         Thời gian đặt: {reservationData.startTime ? new Date(reservationData.startTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
                         {' → '}
