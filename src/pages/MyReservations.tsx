@@ -582,7 +582,7 @@ export default function MyReservations() {
 
             <div className="w-48 h-48 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-2.5 mx-auto shadow-sm mb-4 animate-in zoom-in-95 duration-200">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(String(selectedReservationForQr.id))}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`RESERVATION|reservationId=${selectedReservationForQr.id}|plate=${selectedReservationForQr.licensePlate || ''}`)}`}
                 alt="Reservation QR Code"
                 className="w-full h-full object-contain"
               />

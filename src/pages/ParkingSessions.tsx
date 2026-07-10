@@ -395,7 +395,7 @@ export default function ParkingSessions() {
   };
 
   // Load reservation details and pre-fill form
-  const loadReservation = async (resId: number) => {
+  const loadReservation = async (resId: number): Promise<boolean> => {
     try {
       const reservationsPage = await parkingService.searchReservations({ status: 'APPROVED', size: 50 });
       const allReservations = reservationsPage?.content || [];
@@ -408,19 +408,37 @@ export default function ParkingSessions() {
           setSelectedSlotId(matchedRes.reservedSlotId);
           setSelectedSlotCode(matchedRes.reservedSlotCode || '');
         }
+        setValidationResult(null);
+        setValidationError(null);
+        return true;
       } else {
         alert(`Không tìm thấy đặt chỗ được phê duyệt có mã: #${resId}`);
+        return false;
       }
     } catch (err: any) {
       alert('Lỗi khi tải thông tin đặt chỗ: ' + (err.response?.data?.message || err.message));
+      return false;
     }
   };
 
   // QR code scan handler
-  const handleQrScanSuccess = (decodedText: string) => {
+  const handleQrScanSuccess = async (decodedText: string) => {
     setIsQrScannerOpen(false);
     const cleaned = decodedText.trim();
+    const reservationMatch = cleaned.match(/(?:^|\|)reservationId=(\d+)/i);
+    if (reservationMatch) {
+      await loadReservation(parseInt(reservationMatch[1], 10));
+      setGateSearchQuery('');
+      return;
+    }
     if (qrPurpose === 'search') {
+      if (/^\d+$/.test(cleaned)) {
+        const loadedReservation = await loadReservation(parseInt(cleaned, 10));
+        if (loadedReservation) {
+          setGateSearchQuery('');
+          return;
+        }
+      }
       setGateSearchQuery(cleaned.toUpperCase());
       handleValidateGate(undefined, cleaned.toUpperCase());
     } else {
@@ -447,7 +465,7 @@ export default function ParkingSessions() {
         }
       } else if (/^\d+$/.test(cleaned)) {
         const resId = parseInt(cleaned, 10);
-        loadReservation(resId);
+        void loadReservation(resId);
       } else {
         setLicensePlate(cleaned.toUpperCase());
         setVehicleId(null);
