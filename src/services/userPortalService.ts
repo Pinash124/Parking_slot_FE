@@ -172,7 +172,7 @@ export const userPortalService = {
   },
 
   verifyVnpayReturn: async (queryString: string): Promise<{ success: boolean; amount: number; message?: string; transactionId?: string; exitDeadline?: string | null; referenceCode?: string }> => {
-    const response = await api.get<any>(`/api/payment-gateways/vnpay/return?${queryString}`);
+    const response = await api.get<any>(`/api/payment-gateways/vnpay/verify?${queryString}`);
     const data = response.data;
     const success = data.status === 'COMPLETED' || data.status === 'SUCCESS' || data.payment?.status === 'COMPLETED';
     return {
