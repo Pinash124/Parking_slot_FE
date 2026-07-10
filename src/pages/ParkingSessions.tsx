@@ -394,8 +394,8 @@ export default function ParkingSessions() {
     });
   };
 
-  // Load reservation details and pre-fill form
-  const loadReservation = async (resId: number): Promise<boolean> => {
+  // Load reservation details and optionally check in immediately from QR.
+  const loadReservation = async (resId: number, autoCheckIn = false): Promise<boolean> => {
     try {
       const reservationsPage = await parkingService.searchReservations({ status: 'APPROVED', size: 50 });
       const allReservations = reservationsPage?.content || [];
@@ -410,6 +410,19 @@ export default function ParkingSessions() {
         }
         setValidationResult(null);
         setValidationError(null);
+        if (autoCheckIn) {
+          const slotId = matchedRes.reservedSlotId || (matchedRes as any).slotId;
+          if (!slotId) {
+            alert('Đặt chỗ này chưa có ô đỗ cố định, không thể tự check-in.');
+            return true;
+          }
+          checkInMutation.mutate({
+            licensePlate: matchedRes.licensePlate || '',
+            slotId,
+            reservationId: matchedRes.id,
+            vehicleId: matchedRes.vehicleId,
+          });
+        }
         return true;
       } else {
         alert(`Không tìm thấy đặt chỗ được phê duyệt có mã: #${resId}`);
@@ -427,13 +440,13 @@ export default function ParkingSessions() {
     const cleaned = decodedText.trim();
     const reservationMatch = cleaned.match(/(?:^|\|)reservationId=(\d+)/i);
     if (reservationMatch) {
-      await loadReservation(parseInt(reservationMatch[1], 10));
+      await loadReservation(parseInt(reservationMatch[1], 10), true);
       setGateSearchQuery('');
       return;
     }
     if (qrPurpose === 'search') {
       if (/^\d+$/.test(cleaned)) {
-        const loadedReservation = await loadReservation(parseInt(cleaned, 10));
+        const loadedReservation = await loadReservation(parseInt(cleaned, 10), true);
         if (loadedReservation) {
           setGateSearchQuery('');
           return;
@@ -465,7 +478,7 @@ export default function ParkingSessions() {
         }
       } else if (/^\d+$/.test(cleaned)) {
         const resId = parseInt(cleaned, 10);
-        void loadReservation(resId);
+        void loadReservation(resId, true);
       } else {
         setLicensePlate(cleaned.toUpperCase());
         setVehicleId(null);
