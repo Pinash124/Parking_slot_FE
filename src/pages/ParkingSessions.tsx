@@ -209,60 +209,51 @@ export default function ParkingSessions() {
     }
   };
 
-  // Bước 2B: Thanh toán VNPay → mở link thanh toán, poll trạng thái
+  // Bước 2B: Hiển thị QR cá nhân để khách quét, nhân viên xác nhận thủ công
   const handleTransferPayment = async () => {
     if (!pendingCheckoutSessionId) return;
     setPaymentProcessing(true);
-    setPaymentMsg({ type: 'info', text: 'Đang tạo liên kết thanh toán VNPay...' });
+    setPaymentMsg({ type: 'info', text: 'Đang tạo mã QR thanh toán...' });
     try {
-      const res = await parkingService.createVnpayPayment({
+      const res = await parkingService.createPersonalQrPayment({
         sessionId: pendingCheckoutSessionId,
         amount: pendingCheckoutFee,
-        returnUrl: `${window.location.origin}/payment-return`,
+        returnUrl: undefined,
         orderInfo: `Staff checkout parking session #${pendingCheckoutSessionId}`
       });
       setTransferInfo(res);
       setPaymentMsg({
         type: 'info',
-        text: 'Đã mở cổng thanh toán VNPay. Vui lòng nhập mã thẻ test NCB trên cổng VNPay. Hệ thống tự động mở barrier khi thanh toán thành công.'
+        text: 'Đã tạo QR cá nhân. Cho khách quét mã và xác nhận sau khi nhận được tiền.'
       });
-      if (res.paymentUrl) {
-        window.open(res.paymentUrl, '_blank');
-      }
-      // Start polling every 3 seconds
-      setPaymentPolling(true);
-      const pollInterval = setInterval(async () => {
-        try {
-          const status = await parkingService.getPaymentCheckoutStatus(pendingCheckoutSessionId!);
-          if (status.paid || status.paymentStatus === 'COMPLETED' || status.paymentStatus === 'PAID') {
-            clearInterval(pollInterval);
-            setPaymentPolling(false);
-            // Complete exit
-            await parkingService.staffCompleteExit(pendingCheckoutSessionId!, 'GATE_OUT_01');
-            setShowPaymentModal(false);
-            setTransferInfo(null);
-            setValidationResult(null);
-            setGateSearchQuery('');
-            setOverlayType('checkout');
-            setShowSuccessOverlay(true);
-            refetchActiveSessions();
-            refetchAllSessions();
-            refetchSlots();
-          }
-        } catch (e) {
-          // Silent polling error
-        }
-      }, 3000);
-      // Stop polling after 10 minutes max
-      setTimeout(() => {
-        clearInterval(pollInterval);
-        setPaymentPolling(false);
-        if (showPaymentModal) {
-          setPaymentMsg({ type: 'error', text: 'Hết thời gian chờ thanh toán (10 phút). Vui lòng kiểm tra lại.' });
-        }
-      }, 600000);
+      setPaymentPolling(false);
     } catch (err: any) {
-      setPaymentMsg({ type: 'error', text: err.response?.data?.message || err.message || 'Lỗi tạo thanh toán VNPay.' });
+      setPaymentMsg({ type: 'error', text: err.response?.data?.message || err.message || 'Lỗi tạo QR thanh toán.' });
+    } finally {
+      setPaymentProcessing(false);
+    }
+  };
+
+  const handleConfirmPersonalQrPayment = async () => {
+    if (!pendingCheckoutSessionId || !transferInfo?.paymentId) return;
+    setPaymentProcessing(true);
+    try {
+      await parkingService.confirmManualPayment(transferInfo.paymentId, {
+        gateway: 'PERSONAL_QR',
+        referenceCode: transferInfo.referenceCode,
+      });
+      await parkingService.staffCompleteExit(pendingCheckoutSessionId, 'GATE_OUT_01');
+      setShowPaymentModal(false);
+      setTransferInfo(null);
+      setValidationResult(null);
+      setGateSearchQuery('');
+      setOverlayType('checkout');
+      setShowSuccessOverlay(true);
+      refetchActiveSessions();
+      refetchAllSessions();
+      refetchSlots();
+    } catch (err: any) {
+      setPaymentMsg({ type: 'error', text: err.response?.data?.message || err.message || 'Lỗi xác nhận thanh toán QR.' });
     } finally {
       setPaymentProcessing(false);
     }
@@ -1088,38 +1079,42 @@ export default function ParkingSessions() {
                 </div>
               )}
 
-              {/* VNPay Payment Info */}
+              {/* Personal QR Payment Info */}
               {transferInfo && (
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-4 text-center">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
-                    <svg className="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>
+                  <div className="bg-white border border-slate-200 rounded-2xl p-3 flex justify-center">
+                    <img
+                      src={transferInfo.qrImageUrl}
+                      alt="QR thanh toán"
+                      className="w-52 h-52 object-contain"
+                    />
                   </div>
                   
                   <div className="space-y-1">
-                    <p className="text-xs text-slate-500 font-bold">Mã giao dịch VNPay:</p>
-                    <p className="font-mono text-slate-800 text-sm font-extrabold">{transferInfo.referenceCode}</p>
+                    <p className="text-xs text-slate-500 font-bold">Nội dung chuyển khoản:</p>
+                    <p className="font-mono text-slate-800 text-sm font-extrabold break-all">
+                      {transferInfo.transferContent || transferInfo.referenceCode}
+                    </p>
                   </div>
 
                   <div className="space-y-2">
-                    <a
-                      href={transferInfo.paymentUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-block w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-blue-100 cursor-pointer"
+                    <button
+                      type="button"
+                      onClick={handleConfirmPersonalQrPayment}
+                      disabled={paymentProcessing}
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-blue-100 cursor-pointer disabled:opacity-60"
                     >
-                      Mở lại trang thanh toán VNPay
-                    </a>
+                      {paymentProcessing ? 'Đang xác nhận...' : 'Đã nhận tiền - Mở barrier'}
+                    </button>
                     <p className="text-[9px] text-slate-400 leading-normal font-medium px-4">
-                      Một cửa sổ thanh toán VNPay đã được mở. Vui lòng nhập số thẻ ATM của ngân hàng NCB test (ví dụ: <strong className="font-mono select-all">970419852613143212</strong>) trên cổng thanh toán.
+                      Cho khách quét QR, kiểm tra giao dịch về tài khoản rồi bấm xác nhận để hoàn tất lượt ra.
                     </p>
                   </div>
 
                   {paymentPolling && (
                     <div className="flex items-center justify-center gap-2 pt-2 border-t border-slate-200/60 text-[10px] text-slate-400 font-semibold animate-pulse">
                       <span className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin"></span>
-                      <span>Đang chờ khách hàng thanh toán qua VNPay...</span>
+                      <span>Đang chờ khách hàng quét QR...</span>
                     </div>
                   )}
                 </div>
@@ -1146,7 +1141,7 @@ export default function ParkingSessions() {
                     </div>
                   </button>
 
-                  {/* VNPay Payment Button */}
+                  {/* Personal QR Payment Button */}
                   <button
                     type="button"
                     onClick={handleTransferPayment}
@@ -1159,8 +1154,8 @@ export default function ParkingSessions() {
                       </svg>
                     </div>
                     <div className="text-center">
-                      <p className="text-sm font-extrabold text-indigo-800">Thẻ / VNPay</p>
-                      <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">Nhập mã thẻ ATM,<br/>tự động mở barrier</p>
+                      <p className="text-sm font-extrabold text-indigo-800">QR chuyển khoản</p>
+                      <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">Khách quét QR,<br/>nhân viên xác nhận</p>
                     </div>
                   </button>
                 </div>

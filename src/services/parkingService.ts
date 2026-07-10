@@ -33,6 +33,11 @@ import type {
   ParkingFacilityInfoResponse,
 } from '../types/parking';
 
+const toAbsoluteAssetUrl = (url?: string | null) => {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${api.defaults.baseURL || 'http://localhost:8080'}${url}`;
+};
+
 export const parkingService = {
   // ========== DASHBOARD ==========
   getOverviewReport: async (): Promise<DashboardOverviewResponse> => {
@@ -115,7 +120,10 @@ export const parkingService = {
 
   createPersonalQrPayment: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
     const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/personal-qr', payload);
-    return response.data;
+    return {
+      ...response.data,
+      qrImageUrl: toAbsoluteAssetUrl(response.data.qrImageUrl || '/payment/vnpay-personal-qr.png'),
+    };
   },
 
   getPaymentCheckoutStatus: async (sessionId: number): Promise<any> => {
