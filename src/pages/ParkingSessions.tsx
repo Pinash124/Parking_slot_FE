@@ -304,7 +304,7 @@ export default function ParkingSessions() {
           totalFee: matched.totalFee || matched.parkingFee || 0,
           entryTime: matched.entryTime,
           exitTime: matched.exitTime,
-          openBarrier: matched.status === 'COMPLETED' || matched.status === 'CHECKED_OUT' || matched.status === 'PAYMENT_PENDING',
+          openBarrier: matched.status === 'COMPLETED' || matched.status === 'CHECKED_OUT',
         });
         return;
       }
@@ -360,6 +360,16 @@ export default function ParkingSessions() {
     } finally {
       setExiting(false);
     }
+  };
+
+  const handleOpenPaymentForPendingSession = (session: any) => {
+    setPendingCheckoutSessionId(session.id);
+    setPendingCheckoutFee(Number(session.totalFee || 0));
+    setPendingCheckoutTicket(session.ticketCode || '');
+    setPaymentMsg(null);
+    setTransferInfo(null);
+    setPaymentPolling(false);
+    setShowPaymentModal(true);
   };
 
   // Handle Manual Check-in Submission
@@ -706,7 +716,19 @@ export default function ParkingSessions() {
                             <span>{exiting ? 'Đang xử lý...' : 'Tính phí & Mở barrier cho xe ra'}</span>
                           </button>
                         </div>
-                      ) : (validationResult.status === 'PAYMENT_PENDING' || validationResult.status === 'CHECKED_OUT' || validationResult.status === 'COMPLETED') ? (
+                      ) : validationResult.status === 'PAYMENT_PENDING' ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPaymentForPendingSession(validationResult)}
+                          disabled={exiting}
+                          className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-extrabold cursor-pointer transition flex items-center justify-center space-x-1.5 shadow-md shadow-indigo-600/15"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4" />
+                          </svg>
+                          <span>Thanh toán QR & mở barrier</span>
+                        </button>
+                      ) : (validationResult.status === 'CHECKED_OUT' || validationResult.status === 'COMPLETED') ? (
                         <button
                           type="button"
                           onClick={() => handleConfirmExit(validationResult.id)}
