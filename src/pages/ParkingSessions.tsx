@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { parkingService } from '../services/parkingService';
 import { userPortalService } from '../services/userPortalService';
 import Header from '../components/Header';
+import { formatParkingZoneName, formatVehicleTypeName, formatSlotCodeName } from '../utils/vehicleDisplay';
 import QrScannerModal from '../components/QrScannerModal';
 
 
@@ -99,7 +100,7 @@ export default function ParkingSessions() {
     onSuccess: (res) => {
       setCheckInMsg({
         type: 'success',
-        text: `Cho xe vào bãi thành công! Mã vé: ${res.ticketCode} (Vị trí đỗ: ${res.slotCode || `#${res.slotId}`}).`,
+        text: `Cho xe vào bãi thành công! Mã vé: ${res.ticketCode} (Vị trí đỗ: ${formatSlotCodeName(res.slotCode) || `#${res.slotId}`}).`,
       });
       setTicketCode('');
       setLicensePlate('');
@@ -689,8 +690,8 @@ export default function ParkingSessions() {
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-semibold text-slate-700 border-t border-violet-200/60 pt-3">
                       <div>Biển số: <strong className="font-mono text-slate-900 uppercase">{reservationData.licensePlate}</strong></div>
                       <div>Mã đặt chỗ: <strong className="font-mono text-violet-800">#{reservationData.id}</strong></div>
-                      <div>Khu vực: <strong className="text-slate-800">{reservationData.zoneName || `#${reservationData.zoneId}`}</strong></div>
-                      <div>Ô đỗ: <strong className="text-indigo-700">{reservationData.reservedSlotCode || `#${reservationData.reservedSlotId || 'N/A'}`}</strong></div>
+                      <div>Khu vực: <strong className="text-slate-800">{formatParkingZoneName(reservationData.zoneName) || `#${reservationData.zoneId}`}</strong></div>
+                      <div>Ô đỗ: <strong className="text-indigo-700">{formatSlotCodeName(reservationData.reservedSlotCode) || `#${reservationData.reservedSlotId || 'N/A'}`}</strong></div>
                       <div className="col-span-2 text-slate-500 font-normal text-[10px]">
                         Thời gian đặt: {reservationData.startTime ? new Date(reservationData.startTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
                         {' → '}
@@ -706,7 +707,7 @@ export default function ParkingSessions() {
 
                     <p className="text-[10px] text-violet-600 font-semibold">
                       {selectedSlotId
-                        ? `✓ Ô đỗ đã chọn: ${selectedSlotCode || `#${selectedSlotId}`}. Nhấn Check-in để xác nhận.`
+                        ? `✓ Ô đỗ đã chọn: ${formatSlotCodeName(selectedSlotCode) || `#${selectedSlotId}`}. Nhấn Check-in để xác nhận.`
                         : 'Vui lòng chọn ô đỗ bên dưới rồi nhấn Check-in.'}
                     </p>
 
@@ -751,7 +752,7 @@ export default function ParkingSessions() {
 
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-semibold text-slate-600 border-t border-b border-slate-200/60 py-3.5">
                       <div>Mã vé đỗ: <strong className="text-slate-800 font-mono">{validationResult.ticketCode}</strong></div>
-                      <div>Vị trí đỗ: <strong className="text-indigo-650">{validationResult.slotCode || `Slot #${validationResult.slotId}`}</strong></div>
+                      <div>Vị trí đỗ: <strong className="text-indigo-650">{formatSlotCodeName(validationResult.slotCode) || `Ô đỗ #${validationResult.slotId}`}</strong></div>
                       <div className="col-span-2 mt-1">Giờ vào: <span className="text-slate-500 font-normal">{validationResult.entryTime ? new Date(validationResult.entryTime).toLocaleString('vi-VN') : '—'}</span></div>
                       {validationResult.exitTime && (
                         <div className="col-span-2">Giờ ra: <span className="text-slate-500 font-normal">{new Date(validationResult.exitTime).toLocaleString('vi-VN')}</span></div>
@@ -896,7 +897,7 @@ export default function ParkingSessions() {
                       <input
                         type="text"
                         readOnly
-                        value={selectedSlotCode ? `${selectedSlotCode} (Mã: #${selectedSlotId})` : ''}
+                        value={selectedSlotCode ? `${formatSlotCodeName(selectedSlotCode)} (Mã: #${selectedSlotId})` : ''}
                         placeholder="Vui lòng chọn ô đỗ trên sơ đồ..."
                         className="w-full bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 outline-none cursor-not-allowed"
                       />
@@ -970,9 +971,9 @@ export default function ParkingSessions() {
                                 }`}
                               >
                                 <span className={`w-1.5 h-1.5 rounded-full mb-0.5 shrink-0 ${colorStyle.dot}`}></span>
-                                <span className="font-mono font-black text-xs block leading-none">{slot.slotCode}</span>
+                                <span className="font-mono font-black text-xs block leading-none">{formatSlotCodeName(slot.slotCode)}</span>
                                 <span className="text-[7px] font-bold block opacity-60 truncate mt-0.5 uppercase max-w-full">
-                                  {slot.vehicleTypeName || 'CAR'}
+                                  {formatVehicleTypeName(slot.vehicleTypeName)}
                                 </span>
                               </button>
                             );
@@ -1037,7 +1038,7 @@ export default function ParkingSessions() {
                             {session.licensePlate || `Xe ID #${session.vehicleId}`}
                           </p>
                           <p className="text-[10px] text-slate-450 font-semibold">
-                            Vị trí: <strong className="text-slate-700 font-bold">{session.slotCode || `Slot #${session.slotId}`}</strong>
+                            Vị trí: <strong className="text-slate-700 font-bold">{formatSlotCodeName(session.slotCode) || `Ô đỗ #${session.slotId}`}</strong>
                           </p>
                           <p className="text-[9px] text-slate-400">
                             Vào lúc: {session.entryTime ? new Date(session.entryTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}
@@ -1121,7 +1122,7 @@ export default function ParkingSessions() {
                       <tr key={session.id || session.sessionId} className="hover:bg-slate-50/50">
                         <td className="py-3.5 font-mono text-slate-500 font-bold">#{session.id || session.sessionId}</td>
                         <td className="py-3.5 text-slate-800 font-extrabold uppercase font-mono tracking-wide">{session.licensePlate || `Xe #${session.vehicleId}`}</td>
-                        <td className="py-3.5 text-indigo-650 font-bold">{session.slotCode || `Slot #${session.slotId}`}</td>
+                        <td className="py-3.5 text-indigo-650 font-bold">{formatSlotCodeName(session.slotCode) || `Ô đỗ #${session.slotId}`}</td>
                         <td className="py-3.5 text-slate-600 font-mono">{session.ticketCode || '—'}</td>
                         <td className="py-3.5 text-slate-455 font-medium">
                           {session.entryTime ? new Date(session.entryTime).toLocaleString('vi-VN') : '—'}
@@ -1322,7 +1323,7 @@ export default function ParkingSessions() {
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-50">
                       <span className="text-slate-450 font-normal">Vị trí đỗ:</span>
-                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{sessionData.slotCode || 'N/A'}</span>
+                      <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">{formatSlotCodeName(sessionData.slotCode) || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between py-1 border-b border-slate-50">
                       <span className="text-slate-450 font-normal">Cổng vào:</span>

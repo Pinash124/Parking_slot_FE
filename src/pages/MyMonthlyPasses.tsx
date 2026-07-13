@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
+import { formatVehicleTypeName, formatSlotCodeName } from '../utils/vehicleDisplay';
 import { userPortalService } from '../services/userPortalService';
 
 export default function MyMonthlyPasses() {
@@ -111,6 +112,16 @@ export default function MyMonthlyPasses() {
   }, [selectedVehicleTypeId, months, pricingPolicies]);
 
   // Helper for toasts
+  const formatMonthlyPassStatus = (status?: string) => {
+    switch ((status || '').toUpperCase()) {
+      case 'ACTIVE': return 'Đang hoạt động';
+      case 'SCHEDULED': return 'Sắp hiệu lực';
+      case 'PENDING_PAYMENT': return 'Chờ thanh toán';
+      case 'EXPIRED': return 'Đã hết hạn';
+      case 'CANCELLED': return 'Đã hủy';
+      default: return status || 'Chưa rõ';
+    }
+  };
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
@@ -142,7 +153,7 @@ export default function MyMonthlyPasses() {
       if (data?.qrImageUrl) {
         setQrPayment(data);
         queryClient.invalidateQueries({ queryKey: ['myMonthlyPasses'] });
-        showToast('Da tao QR thanh toan.', 'success');
+        showToast('Đã tạo QR thanh toán.', 'success');
       } else {
         showToast('Không lấy được ảnh QR thanh toán.', 'error');
       }
@@ -264,7 +275,7 @@ export default function MyMonthlyPasses() {
                   <option value="">-- Chọn xe của bạn --</option>
                   {availableVehiclesForPass.map((v) => (
                     <option key={v.id} value={v.id}>
-                      {v.plateNumber} ({v.vehicleTypeName || 'N/A'})
+                      {v.plateNumber} ({formatVehicleTypeName(v.vehicleTypeName)})
                     </option>
                   ))}
                 </select>
@@ -347,7 +358,7 @@ export default function MyMonthlyPasses() {
                     <option value="">-- Ô đỗ --</option>
                     {availableSlots.map((s) => (
                       <option key={s.slotId} value={s.slotId}>
-                        {s.slotCode}
+                        {formatSlotCodeName(s.slotCode)}
                       </option>
                     ))}
                   </select>
@@ -449,9 +460,9 @@ export default function MyMonthlyPasses() {
                       <div className="space-y-3">
                         <div className="flex justify-between items-start">
                           <div>
-                            <span className="text-[10px] font-bold font-mono text-slate-400 block">MÃ ĐĂNG KÝ #{p.id}</span>
+                            <span className="text-[10px] font-bold font-mono text-slate-400 block">Mã đăng ký #{p.id}</span>
                             <span className="font-mono font-black text-slate-900 text-sm uppercase block mt-0.5">{p.licensePlate}</span>
-                            <span className="text-[9px] text-slate-450 block font-normal">{p.vehicleTypeName}</span>
+                            <span className="text-[9px] text-slate-450 block font-normal">{formatVehicleTypeName(p.vehicleTypeName)}</span>
                           </div>
                           
                           {/* Badge Status */}
@@ -464,7 +475,7 @@ export default function MyMonthlyPasses() {
                               ? 'bg-amber-50 border-amber-100 text-amber-700'
                               : 'bg-slate-100 border-slate-200 text-slate-500'
                           }`}>
-                            {p.status === 'ACTIVE' ? 'Đang hoạt động' : (p.status === 'PENDING_PAYMENT' ? 'Chờ thanh toán' : p.status)}
+                            {formatMonthlyPassStatus(p.status)}
                           </span>
                         </div>
 
@@ -472,7 +483,7 @@ export default function MyMonthlyPasses() {
                         <div className="bg-white border border-slate-100 p-2.5 rounded-xl text-[10px] space-y-1 font-semibold text-slate-500">
                           <div className="flex justify-between">
                             <span>Vị trí cố định:</span>
-                            <strong className="text-slate-800">{p.slotCode || 'N/A'}</strong>
+                            <strong className="text-slate-800">{formatSlotCodeName(p.slotCode) || 'N/A'}</strong>
                           </div>
                           <div className="flex justify-between">
                             <span>Ngày bắt đầu:</span>

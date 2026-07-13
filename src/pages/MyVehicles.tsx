@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
+import { formatVehicleTypeName } from '../utils/vehicleDisplay';
 import { userPortalService } from '../services/userPortalService';
 import type { VehicleRequest } from '../types/parking';
 
@@ -199,7 +200,7 @@ export default function MyVehicles() {
                     <div className="space-y-2 text-xs pl-2">
                       <div className="flex justify-between py-1 border-b border-slate-50">
                         <span className="text-slate-400">Phân loại xe:</span>
-                        <span className="font-semibold text-slate-750">{v.vehicleTypeName || 'N/A'}</span>
+                        <span className="font-semibold text-slate-750">{formatVehicleTypeName(v.vehicleTypeName)}</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-50">
                         <span className="text-slate-400">Hãng xe (Hiệu):</span>

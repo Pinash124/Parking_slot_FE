@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
+import { formatVehicleTypeName } from '../utils/vehicleDisplay';
 import { parkingService } from '../services/parkingService';
 
 export default function AdminPolicies() {
@@ -204,7 +205,7 @@ export default function AdminPolicies() {
                 >
                   <option value="">-- Chọn loại xe --</option>
                   {vehicleTypes.map((vt) => (
-                    <option key={vt.id} value={vt.id}>{vt.name}</option>
+                    <option key={vt.id} value={vt.id}>{formatVehicleTypeName(vt.name)}</option>
                   ))}
                 </select>
                 {vehicleTypeError && <p className="mt-1 text-[10px] text-rose-500 font-medium">{vehicleTypeError}</p>}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
+import { formatVehicleTypeName, formatSlotCodeName, formatSlotStatusName } from '../utils/vehicleDisplay';
 import QrScannerModal from '../components/QrScannerModal';
 import { adminService } from '../services/adminService';
 import { parkingService } from '../services/parkingService';
@@ -18,6 +19,16 @@ type MainTabType = 'overview' | 'slots' | 'vehicles' | 'accounts' | 'system' | '
 type VehiclesSubTabType = 'vehicleList' | 'vehicleTypes';
 type SystemSubTabType = 'hardware' | 'settings' | 'logs';
 
+const formatMonthlyPassStatus = (status?: string) => {
+  switch ((status || '').toUpperCase()) {
+    case 'ACTIVE': return 'Đang hoạt động';
+    case 'SCHEDULED': return 'Sắp hiệu lực';
+    case 'PENDING_PAYMENT': return 'Chờ thanh toán';
+    case 'EXPIRED': return 'Đã hết hạn';
+    case 'CANCELLED': return 'Đã hủy';
+    default: return status || 'Chưa rõ';
+  }
+};
 export default function AdminDashboard() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<MainTabType>('overview');
@@ -372,12 +383,12 @@ export default function AdminDashboard() {
         {/* Page Title */}
         <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Kênh Quản Trị Hệ Thống (System Admin Panel)</h2>
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Kênh Quản Trị Hệ Thống</h2>
             <p className="text-slate-400 text-xs mt-0.5">Quản lý cơ sở hạ tầng, tài khoản vận hành, thiết bị phần cứng, cài đặt tham số SLA và sao lưu hệ thống.</p>
           </div>
           <div className="bg-white border border-slate-200 px-4.5 py-2 rounded-2xl text-xs font-bold text-slate-600 flex items-center space-x-2.5 shadow-sm">
             <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping"></span>
-            <span>Uptime máy chủ: <strong>{systemStatus?.uptime || '99.9%'}</strong></span>
+            <span>Thời gian hoạt động máy chủ: <strong>{systemStatus?.uptime || '99.9%'}</strong></span>
           </div>
         </div>
 
@@ -398,7 +409,7 @@ export default function AdminDashboard() {
                 activeTab === 'slots' ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/10' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
               }`}
             >
-              Vị trí đỗ (Slots)
+              Vị trí đỗ
             </button>
             <button
               onClick={() => setActiveTab('vehicles')}
@@ -591,13 +602,13 @@ export default function AdminDashboard() {
                       className="border border-slate-200 rounded-2xl p-4 flex flex-col justify-between space-y-3 shadow-inner hover:shadow transition bg-slate-50/50"
                     >
                       <div>
-                        <span className="font-mono font-black text-sm text-slate-800 tracking-wide">{slot.slotCode}</span>
-                        <span className="text-[9px] font-bold text-slate-400 block uppercase mt-0.5">{slot.vehicleTypeName || 'N/A'}</span>
+                        <span className="font-mono font-black text-sm text-slate-800 tracking-wide">{formatSlotCodeName(slot.slotCode)}</span>
+                        <span className="text-[9px] font-bold text-slate-400 block uppercase mt-0.5">{formatVehicleTypeName(slot.vehicleTypeName)}</span>
                       </div>
 
                       <div className="flex justify-between items-center text-[10px]">
                         <span className={`px-2 py-0.5 rounded-[5px] font-bold border uppercase ${statusBadge}`}>
-                          {slot.status}
+                          {formatSlotStatusName(slot.status)}
                         </span>
                       </div>
 
@@ -700,7 +711,7 @@ export default function AdminDashboard() {
                             <td className="py-3.5 px-4 font-mono font-bold text-slate-900 uppercase">
                               <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl tracking-wide">{v.plateNumber}</span>
                             </td>
-                            <td className="py-3.5 px-4 text-indigo-700">{v.vehicleTypeName || `Loại #${v.vehicleTypeId}`}</td>
+                            <td className="py-3.5 px-4 text-indigo-700">{formatVehicleTypeName(v.vehicleTypeName || `Loại #${v.vehicleTypeId}`)}</td>
                             <td className="py-3.5 px-4 text-slate-700">{v.brand || '—'}</td>
                             <td className="py-3.5 px-4 text-slate-700">{v.color || '—'}</td>
                             <td className="py-3.5 pl-4 text-right">
@@ -1326,11 +1337,11 @@ export default function AdminDashboard() {
                             <td className="py-3 px-2 font-mono text-slate-400">#{p.id}</td>
                             <td className="py-3 px-2">
                               <span className="font-mono text-slate-900 uppercase block">{p.licensePlate || `Xe #${p.vehicleId}`}</span>
-                              <span className="text-[9px] text-slate-400 block font-normal">{p.vehicleTypeName || 'N/A'}</span>
+                              <span className="text-[9px] text-slate-400 block font-normal">{formatVehicleTypeName(p.vehicleTypeName)}</span>
                             </td>
                             <td className="py-3 px-2">
-                              <span className="text-slate-700 block font-bold">{p.slotCode || 'Chưa xếp'}</span>
-                              <span className="text-[9px] text-slate-400 block font-normal">Trạng thái slot: {p.slotStatus || '—'}</span>
+                              <span className="text-slate-700 block font-bold">{formatSlotCodeName(p.slotCode) || 'Chưa xếp'}</span>
+                              <span className="text-[9px] text-slate-400 block font-normal">Trạng thái ô đỗ: {formatSlotStatusName(p.slotStatus) || '—'}</span>
                             </td>
                             <td className="py-3 px-2 text-slate-500 font-mono text-[9px]">
                               <div>Từ: {startStr}</div>
@@ -1349,7 +1360,7 @@ export default function AdminDashboard() {
                                   ? 'bg-amber-50 text-amber-700 border-amber-100'
                                   : 'bg-slate-100 text-slate-500 border-slate-200'
                               }`}>
-                                {p.status}
+                                {formatMonthlyPassStatus(p.status)}
                               </span>
                             </td>
                             <td className="py-3 px-2 text-right">

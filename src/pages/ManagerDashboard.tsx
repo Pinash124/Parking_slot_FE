@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import { parkingService } from '../services/parkingService';
+import { formatFeedbackTypeName, formatIncidentTypeName, formatSlotCodeName } from '../utils/vehicleDisplay';
 import type {
   ZoneRequest,
   SlotRequest,
@@ -174,8 +175,9 @@ export default function ManagerDashboard() {
 
   const getVehicleFilterGroup = (name?: string) => {
     const normalized = (name || '').toUpperCase();
-    if (normalized.includes('MOTOR') || normalized.includes('BIKE') || normalized.includes('MOTORBIKE')) return 'TWO_WHEEL';
-    if (normalized.includes('CAR') || normalized.includes('AUTO') || normalized.includes('OTOMOBILE')) return 'FOUR_WHEEL';
+    const ascii = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (normalized.includes('MOTOR') || normalized.includes('BIKE') || ascii.includes('XE 2') || ascii.includes('XE MAY') || ascii.includes('2 BANH')) return 'TWO_WHEEL';
+    if (normalized.includes('CAR') || normalized.includes('AUTO') || normalized.includes('OTOMOBILE') || ascii.includes('O TO')) return 'FOUR_WHEEL';
     return 'OTHER';
   };
 
@@ -186,27 +188,34 @@ export default function ManagerDashboard() {
 
   const formatVehicleTypeLabel = (name?: string) => {
     const group = getVehicleFilterGroup(name);
-    if (group === 'TWO_WHEEL') return 'Motorbike';
-    if (group === 'FOUR_WHEEL') return 'Car';
-    return name || 'Other';
+    if (group === 'TWO_WHEEL') return 'Xe 2 bánh';
+    if (group === 'FOUR_WHEEL') return 'Ô tô';
+    return name || 'Khác';
   };
 
   const formatZoneName = (name?: string) => {
     const rawName = name || '';
     const normalized = rawName.toUpperCase();
     const floor = normalized.match(/^F\d+/)?.[0] || '';
-    if (normalized.includes('MOTORBIKE')) return floor ? `${floor} - Motorbike` : 'Motorbike';
-    if (normalized.includes('CAR-MONTHLY')) return floor ? `${floor} - Car Monthly` : 'Car Monthly';
-    if (normalized.includes('CAR-NORMAL')) return floor ? `${floor} - Car Normal` : 'Car Normal';
-    return rawName || 'Unknown zone';
+    if (normalized.includes('MOTORBIKE')) return floor ? `${floor} - Xe 2 bánh` : 'Xe 2 bánh';
+    if (normalized.includes('CAR-MONTHLY')) return floor ? `${floor} - Ô tô tháng` : 'Ô tô tháng';
+    if (normalized.includes('CAR-NORMAL')) return floor ? `${floor} - Ô tô thường` : 'Ô tô thường';
+    return rawName || 'Chưa rõ phân khu';
   };
 
-  const formatZoneOptionLabel = (zone: any) => `${formatZoneName(zone.zoneName)} (${formatVehicleTypeLabel(zone.vehicleTypeName)})`;
+  const formatZoneOptionLabel = (zone: any) => formatZoneName(zone.zoneName);
 
+  const formatFloorName = (name?: string) => {
+    const rawName = name || '';
+    return rawName.replace(/^Floor\s*(\d+)/i, 'T\u1ea7ng $1');
+  };
   const zoneOptionsForSlotFilter = zones.filter((zone) =>
     slotFilterVehicleType === 'ALL' || getVehicleFilterGroup(zone.vehicleTypeName) === slotFilterVehicleType
   );
 
+  const getIssueType = (item: any) => String(item?.incidentType || item?.feedbackType || item?.category || '').toUpperCase();
+  const isFeedbackOnlyType = (item: any) => ['COMPLAINT', 'SUGGESTION', 'OTHER'].includes(getIssueType(item));
+  const isOperationalIncident = (item: any) => !isFeedbackOnlyType(item);
   // Filter slots
   const filteredSlots = slots.filter((s) => {
     const vehicleTypeMatch = slotFilterVehicleType === 'ALL' || getVehicleFilterGroup(getSlotVehicleTypeName(s)) === slotFilterVehicleType;
@@ -281,9 +290,9 @@ export default function ManagerDashboard() {
             }`}
           >
             Xử Lý Sự Cố
-            {incidents.filter((i) => i.status === 'OPEN').length > 0 && (
+            {incidents.filter((i) => isOperationalIncident(i) && i.status === 'OPEN').length > 0 && (
               <span className="ml-1.5 px-1.5 py-0.5 text-[9px] bg-rose-500 text-white rounded-full font-bold">
-                {incidents.filter((i) => i.status === 'OPEN').length}
+                {incidents.filter((i) => isOperationalIncident(i) && i.status === 'OPEN').length}
               </span>
             )}
           </button>
@@ -301,7 +310,7 @@ export default function ManagerDashboard() {
         {activeSubTab === 'parking' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
-              <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Thêm Phân Khu (Zone) Mới</h3>
+              <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Thêm Phân Khu Mới</h3>
               <form onSubmit={handleAddZone} className="space-y-3 text-xs">
                 <div>
                   <label className="block font-bold text-slate-500 mb-1">Tên phân khu</label>
@@ -315,7 +324,7 @@ export default function ManagerDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-500 mb-1">Chọn Tầng (Floor)</label>
+                  <label className="block font-bold text-slate-500 mb-1">Chọn Tầng</label>
                   <select
                     value={newZoneFloorId}
                     onChange={(e) => setNewZoneFloorId(e.target.value)}
@@ -325,7 +334,7 @@ export default function ManagerDashboard() {
                     <option value="">-- Chọn Tầng --</option>
                     {floors.map((f) => (
                       <option key={f.id} value={f.id}>
-                        {f.floorName} ({f.buildingName || `Tòa nhà #${f.buildingId}`})
+                        {formatFloorName(f.floorName)} ({f.buildingName || `Tòa nhà #${f.buildingId}`})
                       </option>
                     ))}
                   </select>
@@ -347,7 +356,7 @@ export default function ManagerDashboard() {
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-500 mb-1">Sức chứa tối đa (Slots)</label>
+                  <label className="block font-bold text-slate-500 mb-1">Sức chứa tối đa (chiếc)</label>
                   <input
                     type="number"
                     required
@@ -380,10 +389,10 @@ export default function ManagerDashboard() {
                   <tbody className="divide-y divide-slate-100 text-slate-700">
                     {zones.map((zone) => (
                       <tr key={zone.id} className="hover:bg-slate-50 transition">
-                        <td className="py-3.5 font-bold text-slate-800">{zone.zoneName}</td>
-                        <td className="py-3.5 font-semibold text-slate-500">{zone.floorName || `Tầng #${zone.floorId}`}</td>
+                        <td className="py-3.5 font-bold text-slate-800">{formatZoneName(zone.zoneName)}</td>
+                        <td className="py-3.5 font-semibold text-slate-500">{formatFloorName(zone.floorName) || `Tầng #${zone.floorId}`}</td>
                         <td className="py-3.5 font-medium text-slate-650">{formatVehicleTypeLabel(zone.vehicleTypeName) || `Type #${zone.vehicleTypeId}`}</td>
-                        <td className="py-3.5 text-right font-bold text-indigo-600">{zone.id ? slots.filter(s => s.zoneId === zone.id).length : 0} slots</td>
+                        <td className="py-3.5 text-right font-bold text-indigo-600">{zone.id ? slots.filter(s => s.zoneId === zone.id).length : 0} chiếc</td>
                       </tr>
                     ))}
                     {zones.length === 0 && (
@@ -484,7 +493,7 @@ export default function ManagerDashboard() {
                 <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Tạo Slot Đỗ Mới</h3>
                 <form onSubmit={handleAddSlot} className="space-y-3 text-xs">
                   <div>
-                    <label className="block font-bold text-slate-500 mb-1">Mã vị trí (Slot Code)</label>
+                    <label className="block font-bold text-slate-500 mb-1">Mã vị trí</label>
                     <input
                       type="text"
                       required
@@ -495,7 +504,7 @@ export default function ManagerDashboard() {
                     />
                   </div>
                   <div>
-                    <label className="block font-bold text-slate-500 mb-1">Phân khu (Zone)</label>
+                    <label className="block font-bold text-slate-500 mb-1">Phân khu</label>
                     <select
                       value={newSlotZoneId}
                       onChange={(e) => setNewSlotZoneId(e.target.value)}
@@ -521,10 +530,10 @@ export default function ManagerDashboard() {
 
               {/* Filters */}
               <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-3.5">
-                <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Filter Slot List</h3>
+                <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Lọc danh sách ô đỗ</h3>
                 <div className="text-xs space-y-3">
                   <div>
-                    <label className="block font-bold text-slate-500 mb-1">Vehicle Type</label>
+                    <label className="block font-bold text-slate-500 mb-1">Loại xe</label>
                     <select
                       value={slotFilterVehicleType}
                       onChange={(e) => {
@@ -533,21 +542,21 @@ export default function ManagerDashboard() {
                       }}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
                     >
-                      <option value="ALL">All vehicle types</option>
-                      <option value="TWO_WHEEL">Motorbike</option>
-                      <option value="FOUR_WHEEL">Car</option>
-                      <option value="OTHER">Other</option>
+                      <option value="ALL">Tất cả loại xe</option>
+                      <option value="TWO_WHEEL">Xe 2 bánh</option>
+                      <option value="FOUR_WHEEL">Ô tô</option>
+                      <option value="OTHER">Khác</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-500 mb-1">Zone</label>
+                    <label className="block font-bold text-slate-500 mb-1">Khu vực</label>
                     <select
                       value={slotFilterZone}
                       onChange={(e) => setSlotFilterZone(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
                     >
-                      <option value="ALL">All zones</option>
+                      <option value="ALL">Tất cả khu vực</option>
                       {zoneOptionsForSlotFilter.map((z) => (
                         <option key={z.id} value={String(z.id)}>
                           {formatZoneOptionLabel(z)}
@@ -557,17 +566,17 @@ export default function ManagerDashboard() {
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-500 mb-1">Status</label>
+                    <label className="block font-bold text-slate-500 mb-1">Trạng thái</label>
                     <select
                       value={slotFilterStatus}
                       onChange={(e) => setSlotFilterStatus(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
                     >
-                      <option value="ALL">All statuses</option>
-                      <option value="AVAILABLE">Available</option>
-                      <option value="OCCUPIED">Occupied</option>
-                      <option value="RESERVED">Reserved</option>
-                      <option value="MAINTENANCE">Maintenance</option>
+                      <option value="ALL">Tất cả trạng thái</option>
+                      <option value="AVAILABLE">Trống</option>
+                      <option value="OCCUPIED">Đang sử dụng</option>
+                      <option value="RESERVED">Đã đặt trước</option>
+                      <option value="MAINTENANCE">Bảo trì</option>
                       <option value="LOCKED">Locked</option>
                     </select>
                   </div>
@@ -578,16 +587,16 @@ export default function ManagerDashboard() {
             {/* Right: Graphic Grid View */}
             <div className="lg:col-span-3 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-sm font-bold text-slate-800">Slot Status Grid</h3>
-                <span className="text-xs text-slate-400 font-semibold">Showing {filteredSlots.length} slots</span>
+                <h3 className="text-sm font-bold text-slate-800">Sơ đồ trạng thái ô đỗ</h3>
+                <span className="text-xs text-slate-400 font-semibold">Hiển thị {filteredSlots.length} ô đỗ</span>
               </div>
 
-              {/* Status Labels Legend */}
+              {/* Chú thích trạng thái */}
               <div className="flex flex-wrap gap-3 text-[10px] font-bold text-slate-500 mb-4 bg-slate-50/50 p-2.5 rounded-xl border border-slate-200">
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-md mr-1.5"></span>Available</span>
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-rose-500 rounded-md mr-1.5"></span>Occupied</span>
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-md mr-1.5"></span>Reserved</span>
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-amber-500 rounded-md mr-1.5"></span>Maintenance</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-md mr-1.5"></span>Trống</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-rose-500 rounded-md mr-1.5"></span>Đang sử dụng</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-md mr-1.5"></span>Đã đặt trước</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-amber-500 rounded-md mr-1.5"></span>Bảo trì</span>
                 <span className="flex items-center"><span className="w-2.5 h-2.5 bg-slate-400 rounded-md mr-1.5"></span>Locked</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
@@ -611,13 +620,13 @@ export default function ManagerDashboard() {
                   return (
                     <div key={slot.id} className={`border rounded-2xl p-3.5 space-y-2.5 transition relative ${statusBg}`}>
                       <div className="flex justify-between items-center">
-                        <span className="font-extrabold text-sm tracking-tight">{slot.slotCode}</span>
+                        <span className="font-extrabold text-sm tracking-tight">{formatSlotCodeName(slot.slotCode)}</span>
                         <span className={`w-2 h-2 rounded-full ${badgeDot}`}></span>
                       </div>
                       
                       <div className="text-[10px] space-y-0.5 opacity-90">
-                        <p className="font-bold">Zone: {formatZoneName(slot.zoneName) || `Zone #${slot.zoneId}`}</p>
-                        <p className="font-medium">Type: {formatVehicleTypeLabel(slot.vehicleTypeName)}</p>
+                        <p className="font-bold">Khu vực: {formatZoneName(slot.zoneName) || `Khu vực #${slot.zoneId}`}</p>
+                        <p className="font-medium">Loại xe: {formatVehicleTypeLabel(slot.vehicleTypeName)}</p>
                       </div>
 
                       {/* Dropdown status toggler */}
@@ -627,10 +636,10 @@ export default function ManagerDashboard() {
                           onChange={(e) => updateSlotStatusMutation.mutate({ id: slot.id, status: e.target.value })}
                           className="bg-white hover:bg-slate-50 border border-slate-250 text-[10px] font-bold rounded-lg px-1.5 py-0.5 text-slate-700 cursor-pointer focus:outline-none"
                         >
-                          <option value="AVAILABLE">Available</option>
-                          <option value="OCCUPIED">Occupied</option>
-                          <option value="RESERVED">Reserved</option>
-                          <option value="MAINTENANCE">Maintenance</option>
+                          <option value="AVAILABLE">Trống</option>
+                          <option value="OCCUPIED">Đang sử dụng</option>
+                          <option value="RESERVED">Đã đặt trước</option>
+                          <option value="MAINTENANCE">Bảo trì</option>
                           <option value="LOCKED">Locked</option>
                         </select>
                       </div>
@@ -641,7 +650,7 @@ export default function ManagerDashboard() {
 
               {filteredSlots.length === 0 && (
                 <div className="text-center py-12 text-slate-400 text-xs">
-                  No slots match the selected filters.
+                  Không có ô đỗ phù hợp với bộ lọc.
                 </div>
               )}
             </div>
@@ -796,7 +805,7 @@ export default function ManagerDashboard() {
           <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
             <div className="flex justify-between items-center border-b border-slate-100 pb-3">
               <h3 className="text-sm font-bold text-slate-800">Phê Duyệt Xử Lý Sự Cố Khẩn Cấp</h3>
-              <span className="text-xs text-slate-400 font-semibold">{incidents.filter(i => i.status === 'OPEN').length} sự cố chưa duyệt</span>
+              <span className="text-xs text-slate-400 font-semibold">{incidents.filter(i => isOperationalIncident(i) && i.status === 'OPEN').length} sự cố chưa duyệt</span>
             </div>
 
             <div className="overflow-x-auto text-xs">
@@ -812,12 +821,12 @@ export default function ManagerDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-755">
-                  {incidents.map((ex) => (
+                  {incidents.filter((ex) => isOperationalIncident(ex)).map((ex) => (
                     <tr key={ex.id} className="hover:bg-slate-50 transition">
-                      <td className="py-4 font-bold text-slate-800">{ex.licensePlate || (ex.sessionId ? `Lượt #${ex.sessionId}` : 'Sự cố chung')}</td>
+                      <td className="py-4 font-bold text-slate-800">{ex.licensePlate || 'Không có biển số'}</td>
                       <td className="py-4">
                         <span className="font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-lg border border-rose-100">
-                          {ex.incidentType}
+                          {formatIncidentTypeName(ex.incidentType)}
                         </span>
                       </td>
                       <td className="py-4 text-slate-600">{ex.description || 'N/A'}</td>
@@ -826,7 +835,7 @@ export default function ManagerDashboard() {
                         <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
                           ex.status === 'OPEN' ? 'bg-amber-50 border-amber-250 text-amber-800' : 'bg-slate-100 border-slate-200 text-slate-500'
                         }`}>
-                          {ex.status === 'OPEN' ? 'Đang Chờ Duyệt' : 'Đã Giải Quyết'}
+                          {ex.status === 'OPEN' ? 'Đang chờ duyệt' : 'Đã giải quyết'}
                         </span>
                       </td>
                       <td className="py-4 text-center">
@@ -843,9 +852,9 @@ export default function ManagerDashboard() {
                       </td>
                     </tr>
                   ))}
-                  {incidents.length === 0 && (
+                  {incidents.filter((ex) => isOperationalIncident(ex)).length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center py-6 text-slate-400 font-medium">Chưa ghi nhận sự cố nào.</td>
+                      <td colSpan={6} className="text-center py-6 text-slate-400 font-medium">Chưa có sự cố vận hành nào.</td>
                     </tr>
                   )}
                 </tbody>
@@ -857,9 +866,9 @@ export default function ManagerDashboard() {
         {/* Tab 7: Feedbacks */}
         {activeSubTab === 'feedbacks' && (
           <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
-            <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-3">Phản Hồi Từ Khách Hàng gửi xe</h3>
+            <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-3">Ý kiến phản hồi từ khách hàng</h3>
             <div className="space-y-4 pt-2">
-              {feedbacks.map((fb) => (
+              {feedbacks.filter((fb) => isFeedbackOnlyType(fb)).map((fb) => (
                 <div key={fb.id} className="border border-slate-200 rounded-2xl p-4 bg-slate-50/50 space-y-2.5">
                   <div className="flex justify-between items-start">
                     <div>
@@ -868,7 +877,7 @@ export default function ManagerDashboard() {
                     </div>
                     {(fb.feedbackType || fb.category) && (
                       <span className="text-[10px] font-bold bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded-lg">
-                        {fb.feedbackType || fb.category}
+                        {formatFeedbackTypeName(fb.feedbackType || fb.category)}
                       </span>
                     )}
                   </div>
@@ -880,10 +889,8 @@ export default function ManagerDashboard() {
                   )}
                 </div>
               ))}
-              {feedbacks.length === 0 && (
-                <div className="text-center py-8 text-slate-400 text-xs font-medium">
-                  Chưa nhận được phản hồi nào từ khách hàng.
-                </div>
+              {feedbacks.filter((fb) => isFeedbackOnlyType(fb)).length === 0 && (
+                <div className="text-center py-8 text-slate-400 text-xs font-medium">Chưa có ý kiến phản hồi nào.</div>
               )}
             </div>
           </div>
