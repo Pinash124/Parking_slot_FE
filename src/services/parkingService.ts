@@ -107,6 +107,13 @@ export const parkingService = {
     return response.data;
   },
 
+  staffLookupSession: async (query: string): Promise<ParkingSessionResponse> => {
+    const response = await api.get<ParkingSessionResponse>('/api/staff/parking-sessions/lookup', {
+      params: { query },
+    });
+    return response.data;
+  },
+
   // ========== PAYMENT GATEWAYS ==========
   createVnpayPayment: async (payload: PaymentGatewayRequest): Promise<PaymentGatewayResponse> => {
     const response = await api.post<PaymentGatewayResponse>('/api/payment-gateways/vnpay', payload);
@@ -174,6 +181,7 @@ export const parkingService = {
     userId?: number;
     vehicleId: number;
     zoneId: number;
+    slotId?: number;
     startTime: string;
     endTime: string;
   }): Promise<ReservationResponse> => {

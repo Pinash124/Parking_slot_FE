@@ -1,23 +1,23 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { authService } from './services/authService';
 import { WebSocketProvider } from './context/WebSocketContext';
 
-// Pages
-import Login from './pages/Login';
-import Register from './pages/Register';
-import LandingPage from './pages/LandingPage';
-import DriverDashboard from './pages/DriverDashboard';
-import MyVehicles from './pages/MyVehicles';
-import MyReservations from './pages/MyReservations';
-import MyMonthlyPasses from './pages/MyMonthlyPasses';
-import PaymentReturn from './pages/PaymentReturn';
-import ManagerDashboard from './pages/ManagerDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import ParkingSessions from './pages/ParkingSessions';
-import ParkingLogs from './pages/ParkingLogs';
-import ChangePassword from './pages/ChangePassword';
+// Pages are lazy-loaded so users only download the portal they open.
+const Login = React.lazy(() => import('./pages/Login'));
+const Register = React.lazy(() => import('./pages/Register'));
+const LandingPage = React.lazy(() => import('./pages/LandingPage'));
+const DriverDashboard = React.lazy(() => import('./pages/DriverDashboard'));
+const MyVehicles = React.lazy(() => import('./pages/MyVehicles'));
+const MyReservations = React.lazy(() => import('./pages/MyReservations'));
+const MyMonthlyPasses = React.lazy(() => import('./pages/MyMonthlyPasses'));
+const PaymentReturn = React.lazy(() => import('./pages/PaymentReturn'));
+const ManagerDashboard = React.lazy(() => import('./pages/ManagerDashboard'));
+const AdminDashboard = React.lazy(() => import('./pages/AdminDashboard'));
+const ParkingSessions = React.lazy(() => import('./pages/ParkingSessions'));
+const ParkingLogs = React.lazy(() => import('./pages/ParkingLogs'));
+const ChangePassword = React.lazy(() => import('./pages/ChangePassword'));
 
 // Create TanStack Query Client
 const queryClient = new QueryClient({
@@ -88,6 +88,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <WebSocketProvider>
         <BrowserRouter>
+          <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-sm font-semibold text-slate-500">Đang tải...</div>}>
           <Routes>
             {/* Guest routes */}
             <Route path="/" element={<LandingPage />} />
@@ -149,6 +150,7 @@ export default function App() {
             {/* Catch all fallback redirects to landing page */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </WebSocketProvider>
     </QueryClientProvider>

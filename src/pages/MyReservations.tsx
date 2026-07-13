@@ -17,14 +17,17 @@ export default function MyReservations() {
   const [selectedBuildingId, setSelectedBuildingId] = useState('');
   const [selectedFloorId, setSelectedFloorId] = useState('');
   const [selectedZoneId, setSelectedZoneId] = useState('');
+  const [selectedSlotId, setSelectedSlotId] = useState('');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [reservationSortDirection, setReservationSortDirection] = useState<'desc' | 'asc'>('desc');
 
   // Form Errors
   const [vehicleError, setVehicleError] = useState<string | null>(null);
   const [buildingError, setBuildingError] = useState<string | null>(null);
   const [floorError, setFloorError] = useState<string | null>(null);
   const [zoneError, setZoneError] = useState<string | null>(null);
+  const [slotError, setSlotError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
 
   // Trigger custom toast
@@ -39,14 +42,60 @@ export default function MyReservations() {
     queryFn: () => userPortalService.getUserPortalVehicles(),
   });
 
-  // Filter vehicles to only show cars (ô tô)
-  const carVehicles = vehicles.filter(
-    (v: any) =>
-      v.vehicleTypeName?.toLowerCase().includes('car') ||
-      v.vehicleTypeName?.toLowerCase().includes('ô tô') ||
-      v.vehicleTypeName?.toLowerCase().includes('4 bánh') ||
-      v.vehicleTypeId === 1
+  const { data: currentSessionsRaw = [] } = useQuery({
+    queryKey: ['userPortalCurrentParkingSessions'],
+    queryFn: () => userPortalService.getUserPortalCurrentSession(),
+  });
+
+  const { data: monthlyPasses = [] } = useQuery({
+    queryKey: ['myMonthlyPassesForReservationFilter'],
+    queryFn: () => userPortalService.monthlyPasses(),
+  });
+
+  const currentSessions = Array.isArray(currentSessionsRaw)
+    ? currentSessionsRaw
+    : (currentSessionsRaw ? [currentSessionsRaw] : []);
+  const activeParkingSessions = currentSessions.filter((session: any) => {
+    const status = String(session?.status || '').toUpperCase();
+    return status === 'ACTIVE' || status === 'PAYMENT_PENDING';
+  });
+  const activeVehicleIds = new Set(
+    activeParkingSessions
+      .map((session: any) => Number(session?.vehicleId))
+      .filter((id: number) => Number.isFinite(id))
   );
+  const activeLicensePlates = new Set(
+    activeParkingSessions
+      .map((session: any) => String(session?.licensePlate || '').trim().toUpperCase())
+      .filter(Boolean)
+  );
+  const monthlyPassVehicleIds = new Set(
+    monthlyPasses
+      .filter((pass: any) => ['ACTIVE', 'SCHEDULED', 'PENDING_PAYMENT'].includes(String(pass?.status || '').toUpperCase()))
+      .map((pass: any) => Number(pass?.vehicleId))
+      .filter((id: number) => Number.isFinite(id))
+  );
+  const monthlyPassLicensePlates = new Set(
+    monthlyPasses
+      .filter((pass: any) => ['ACTIVE', 'SCHEDULED', 'PENDING_PAYMENT'].includes(String(pass?.status || '').toUpperCase()))
+      .map((pass: any) => String(pass?.licensePlate || '').trim().toUpperCase())
+      .filter(Boolean)
+  );
+
+  // Reservation only accepts normal car vehicles that are not currently inside the parking lot or assigned to a monthly pass.
+  const isCarVehicle = (v: any) =>
+    v.vehicleTypeName?.toLowerCase().includes('car') ||
+    v.vehicleTypeName?.toLowerCase().includes('ô tô') ||
+    v.vehicleTypeName?.toLowerCase().includes('4 bánh') ||
+    v.vehicleTypeId === 1;
+  const allCarVehicles = vehicles.filter(isCarVehicle);
+  const carVehicles = allCarVehicles.filter((v: any) => {
+    const plate = String(v.plateNumber || '').trim().toUpperCase();
+    return !activeVehicleIds.has(Number(v.id))
+      && !activeLicensePlates.has(plate)
+      && !monthlyPassVehicleIds.has(Number(v.id))
+      && !monthlyPassLicensePlates.has(plate);
+  });
 
   const { data: buildings = [] } = useQuery({
     queryKey: ['buildings'],
@@ -67,12 +116,26 @@ export default function MyReservations() {
     enabled: !!selectedFloorId,
   });
 
+  const { data: rawReservationSlots = [], isLoading: isSlotsLoading } = useQuery({
+    queryKey: ['reservationAvailableSlots', selectedZoneId],
+    queryFn: () => userPortalService.getAvailableSlots(selectedZoneId ? parseInt(selectedZoneId, 10) : undefined, undefined, 'RESERVATION'),
+    enabled: !!selectedZoneId,
+  });
+  const reservationSlots = rawReservationSlots.map((s: any) => ({
+    ...s,
+    id: s.slotId ?? s.id,
+  }));
   // Fetch reservation history (user portal scoped)
   const { data: reservationsData, isLoading: isHistoryLoading } = useQuery({
     queryKey: ['reservationsList'],
     queryFn: () => userPortalService.getMyReservations(0, 100),
   });
   const reservations = reservationsData?.content || [];
+  const sortedReservations = [...reservations].sort((a: any, b: any) => {
+    const aId = Number(a.id || 0);
+    const bId = Number(b.id || 0);
+    return reservationSortDirection === 'asc' ? aId - bId : bId - aId;
+  });
 
 
   // Trigger floor fetch when building changes
@@ -81,9 +144,11 @@ export default function MyReservations() {
       refetchFloors();
       setSelectedFloorId('');
       setSelectedZoneId('');
+      setSelectedSlotId('');
     } else {
       setSelectedFloorId('');
       setSelectedZoneId('');
+      setSelectedSlotId('');
     }
   }, [selectedBuildingId]);
 
@@ -93,11 +158,32 @@ export default function MyReservations() {
       refetchZones();
     }
     setSelectedZoneId('');
+    setSelectedSlotId('');
   }, [selectedFloorId]);
+
+  // Each reservation floor is scoped to RESERVATION zones; pick the first valid zone automatically.
+  useEffect(() => {
+    if (!selectedFloorId) return;
+
+    const firstZone = filteredZones[0];
+    if (!firstZone) {
+      if (selectedZoneId) setSelectedZoneId('');
+      setSelectedSlotId('');
+      return;
+    }
+
+    const nextZoneId = String(firstZone.id);
+    if (selectedZoneId !== nextZoneId) {
+      setSelectedZoneId(nextZoneId);
+      setSelectedSlotId('');
+      if (zoneError) setZoneError(null);
+      if (slotError) setSlotError(null);
+    }
+  }, [selectedFloorId, filteredZones, selectedZoneId]);
 
   // Mutations
   const bookingMutation = useMutation({
-    mutationFn: (payload: { vehicleId: number; zoneId: number; startTime: string; endTime: string }) =>
+    mutationFn: (payload: { vehicleId: number; zoneId: number; slotId: number; startTime: string; endTime: string }) =>
       userPortalService.createReservation(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reservationsList'] });
@@ -107,6 +193,7 @@ export default function MyReservations() {
       setSelectedBuildingId('');
       setSelectedFloorId('');
       setSelectedZoneId('');
+      setSelectedSlotId('');
       setStartTime('');
       setEndTime('');
     },
@@ -158,6 +245,13 @@ export default function MyReservations() {
       setZoneError(null);
     }
 
+    if (!selectedSlotId) {
+      setSlotError('Vui long chon o do con trong.');
+      isValid = false;
+    } else {
+      setSlotError(null);
+    }
+
     if (!startTime || !endTime) {
       setDateError('Vui lòng nhập đầy đủ thời gian bắt đầu và kết thúc.');
       isValid = false;
@@ -194,6 +288,7 @@ export default function MyReservations() {
     bookingMutation.mutate({
       vehicleId: parseInt(selectedVehicleId, 10),
       zoneId: parseInt(selectedZoneId, 10),
+      slotId: parseInt(selectedSlotId, 10),
       startTime: toLocalDateTimePayload(startTime),
       endTime: toLocalDateTimePayload(endTime),
     });
@@ -280,6 +375,24 @@ export default function MyReservations() {
     return s === 'REJECTED' || s === 'FAILED' || s === 'FAILURE' || ((s === 'APPROVED' || s === 'CONFIRMED' || s === 'COMPLETED') && isPastReservation(reservation));
   };
 
+  const getReservedSlotCode = (reservation: any) => {
+    return reservation?.reservedSlotCode
+      || reservation?.slotCode
+      || reservation?.parkingSlotCode
+      || reservation?.reservedSlot?.slotCode
+      || (reservation?.reservedSlotId ? `#${reservation.reservedSlotId}` : '')
+      || (reservation?.slotId ? `#${reservation.slotId}` : '');
+  };
+
+  const buildReservationQrData = (reservation: any) => [
+    'RESERVATION',
+    `reservationId=${reservation.id}`,
+    `plate=${reservation.licensePlate || ''}`,
+    `slotId=${reservation.reservedSlotId || reservation.slotId || ''}`,
+    `slot=${getReservedSlotCode(reservation)}`,
+    `zone=${reservation.zoneName || ''}`,
+  ].join('|');
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-700 font-sans antialiased flex flex-col relative">
       <Header />
@@ -289,7 +402,7 @@ export default function MyReservations() {
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Đặt Lịch Giữ Chỗ</h1>
-          <p className="text-slate-450 text-xs mt-1">Đăng ký giữ suất trước trong khu đỗ; ô cụ thể sẽ được hệ thống tự chọn khi xe đến</p>
+          <p className="text-slate-450 text-xs mt-1">Đăng ký giữ chỗ trước và chọn sẵn ô đỗ còn trống trong khu đỗ.</p>
         </div>
 
         {/* Layout split */}
@@ -318,8 +431,10 @@ export default function MyReservations() {
                   } rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-4 transition duration-205`}
                 >
                   <option value="">-- Chọn Xe --</option>
-                  {carVehicles.length === 0 ? (
+                  {allCarVehicles.length === 0 ? (
                     <option value="" disabled>-- Vui lòng đăng ký xe ô tô trước --</option>
+                  ) : carVehicles.length === 0 ? (
+                    <option value="" disabled>-- Xe ô tô đang trong bãi hoặc đã có vé tháng --</option>
                   ) : (
                     carVehicles.map((v) => (
                       <option key={v.id} value={v.id}>
@@ -403,9 +518,11 @@ export default function MyReservations() {
                   value={selectedZoneId}
                   onChange={(e) => {
                     setSelectedZoneId(e.target.value);
+                    setSelectedSlotId('');
                     if (zoneError) setZoneError(null);
+                    if (slotError) setSlotError(null);
                   }}
-                  disabled={!selectedFloorId}
+                  disabled={!selectedFloorId || filteredZones.length <= 1}
                   className={`w-full bg-slate-50 border ${
                     zoneError ? 'border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10'
                   } rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-4 transition duration-205 disabled:opacity-50`}
@@ -420,6 +537,41 @@ export default function MyReservations() {
                 {zoneError && (
                   <p className="mt-1 text-[10px] text-rose-500 font-medium animate-in fade-in duration-150">
                     {zoneError}
+                  </p>
+                )}
+              </div>
+
+              {/* Select Slot */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase text-slate-450 mb-1.5">
+                  Chọn ô đỗ còn trống *
+                </label>
+                <select
+                  value={selectedSlotId}
+                  onChange={(e) => {
+                    setSelectedSlotId(e.target.value);
+                    if (slotError) setSlotError(null);
+                  }}
+                  disabled={!selectedZoneId || isSlotsLoading}
+                  className={`w-full bg-slate-50 border ${
+                    slotError ? 'border-rose-500 focus:ring-rose-500/10' : 'border-slate-200 focus:border-indigo-500 focus:ring-indigo-500/10'
+                  } rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none focus:ring-4 transition duration-205 disabled:opacity-50`}
+                >
+                  <option value="">{isSlotsLoading ? '-- Đang tải ô đỗ --' : '-- Chọn ô đỗ --'}</option>
+                  {reservationSlots.map((slot: any) => (
+                    <option key={slot.id} value={slot.id}>
+                      {slot.slotCode || `Slot #${slot.id}`}
+                    </option>
+                  ))}
+                </select>
+                {selectedZoneId && !isSlotsLoading && reservationSlots.length === 0 && (
+                  <p className="mt-1 text-[10px] text-amber-600 font-medium animate-in fade-in duration-150">
+                    Khu này không còn ô đỗ trống.
+                  </p>
+                )}
+                {slotError && (
+                  <p className="mt-1 text-[10px] text-rose-500 font-medium animate-in fade-in duration-150">
+                    {slotError}
                   </p>
                 )}
               </div>
@@ -479,13 +631,25 @@ export default function MyReservations() {
               Lịch sử đặt lịch của bạn
             </h3>
 
+            <div className="flex items-center justify-end gap-2 mb-4">
+              <span className="text-[10px] font-bold uppercase text-slate-400">Sắp xếp mã đặt chỗ</span>
+              <select
+                value={reservationSortDirection}
+                onChange={(e) => setReservationSortDirection(e.target.value as 'desc' | 'asc')}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500"
+              >
+                <option value="desc">Giảm dần</option>
+                <option value="asc">Tăng dần</option>
+              </select>
+            </div>
+
             {isHistoryLoading ? (
               <div className="flex-1 flex flex-col items-center justify-center py-20">
                 <span className="w-8 h-8 border-3 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span>
                 <p className="text-xs text-slate-400 font-semibold mt-3">Đang tải lịch sử đặt chỗ...</p>
               </div>
             ) : (
-              reservations.length === 0 ? (
+              sortedReservations.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-400 py-20">
                   <svg className="w-12 h-12 mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -506,7 +670,7 @@ export default function MyReservations() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-                      {reservations.map((r: any) => {
+                      {sortedReservations.map((r: any) => {
                         const code = r.ticketCode || `#RSV-${r.id}`;
                         const isExpired = isPastReservation(r);
                         const isCancellable = (r.status?.toUpperCase() === 'PENDING' || r.status?.toUpperCase() === 'APPROVED') && !isExpired;
@@ -520,7 +684,10 @@ export default function MyReservations() {
                               {r.licensePlate || `Xe #${r.vehicleId}`}
                             </td>
                             <td className="py-4 px-4 font-semibold text-slate-750">
-                              {r.zoneName || `Zone #${r.zoneId}`}
+                              <div>{r.zoneName || `Zone #${r.zoneId}`}</div>
+                              <div className="text-[10px] text-indigo-600 font-bold mt-0.5">
+                                {getReservedSlotCode(r) ? `Ô đỗ: ${getReservedSlotCode(r)}` : 'Chưa có ô đỗ'}
+                              </div>
                             </td>
                             <td className="py-4 px-4 text-[11px] text-slate-500 leading-relaxed font-mono">
                               <div>Vào: {r.startTime ? new Date(r.startTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</div>
@@ -637,7 +804,7 @@ export default function MyReservations() {
 
             <div className="w-48 h-48 bg-white border border-slate-200 rounded-2xl flex items-center justify-center p-2.5 mx-auto shadow-sm mb-4 animate-in zoom-in-95 duration-200">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`RESERVATION|reservationId=${selectedReservationForQr.id}|plate=${selectedReservationForQr.licensePlate || ''}`)}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(buildReservationQrData(selectedReservationForQr))}`}
                 alt="Reservation QR Code"
                 className="w-full h-full object-contain"
               />
@@ -646,6 +813,12 @@ export default function MyReservations() {
             {selectedReservationForQr.zoneName && (
               <p className="text-xs text-slate-500 font-semibold mb-2">
                 Khu vực: <span className="text-slate-800 font-bold">{selectedReservationForQr.zoneName}</span>
+              </p>
+            )}
+
+            {getReservedSlotCode(selectedReservationForQr) && (
+              <p className="text-xs text-slate-500 font-semibold mb-2">
+                Ô đỗ: <span className="text-indigo-700 font-bold">{getReservedSlotCode(selectedReservationForQr)}</span>
               </p>
             )}
 

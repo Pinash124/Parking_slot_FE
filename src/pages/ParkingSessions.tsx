@@ -5,6 +5,7 @@ import { userPortalService } from '../services/userPortalService';
 import Header from '../components/Header';
 import QrScannerModal from '../components/QrScannerModal';
 
+
 export default function ParkingSessions() {
 
   // Tab state
@@ -63,14 +64,19 @@ export default function ParkingSessions() {
   const { data: activeSessions = [], refetch: refetchActiveSessions } = useQuery({
     queryKey: ['activeSessionsList'],
     queryFn: () => parkingService.staffGetSessions('ACTIVE'),
-    refetchInterval: 5000,
+    refetchInterval: 10000,
+    staleTime: 3000,
+    refetchOnWindowFocus: false,
   });
 
   // All Sessions Query (History)
   const { data: allSessions = [], refetch: refetchAllSessions } = useQuery({
     queryKey: ['staffAllSessionsList'],
     queryFn: () => parkingService.staffGetSessions(),
-    refetchInterval: 10000,
+    enabled: activeTab === 'history',
+    refetchInterval: activeTab === 'history' ? 30000 : false,
+    staleTime: 10000,
+    refetchOnWindowFocus: false,
   });
 
   // Available Slots Query (For Check-in)
@@ -88,7 +94,7 @@ export default function ParkingSessions() {
 
   // Check-in Mutation
   const checkInMutation = useMutation({
-    mutationFn: (payload: { licensePlate: string; slotId?: number; ticketCode?: string; reservationId?: number; vehicleId?: number }) =>
+    mutationFn: (payload: { licensePlate?: string; slotId?: number; ticketCode?: string; reservationId?: number; vehicleId?: number }) =>
       parkingService.staffCheckIn(entryGateCode, payload),
     onSuccess: (res) => {
       setCheckInMsg({
@@ -279,20 +285,7 @@ export default function ParkingSessions() {
 
     setValidationLoading(true);
     try {
-      // 1. Fetch newest sessions
-      const sessions = await parkingService.staffGetSessions();
-
-      // Match session by ticket code, session id, or license plate
-      const matched = sessions
-        .filter((s: any) =>
-          s.ticketCode?.toUpperCase() === term ||
-          s.id?.toString() === term ||
-          s.licensePlate?.toUpperCase() === term
-        )
-        .sort((a: any, b: any) => (b.id || 0) - (a.id || 0))[0];
-
-      if (matched) {
-        // Found active/historical parking session
+      const applySessionResult = (matched: any) => {
         setValidationResult({
           id: matched.id,
           ticketCode: matched.ticketCode,
@@ -306,24 +299,46 @@ export default function ParkingSessions() {
           exitTime: matched.exitTime,
           openBarrier: matched.status === 'COMPLETED' || matched.status === 'CHECKED_OUT',
         });
+      };
+
+      const cachedMatch = activeSessions
+        .filter((s: any) =>
+          s.ticketCode?.toUpperCase() === term ||
+          s.id?.toString() === term ||
+          s.licensePlate?.toUpperCase() === term
+        )
+        .sort((a: any, b: any) => (b.id || 0) - (a.id || 0))[0];
+
+      if (cachedMatch) {
+        applySessionResult(cachedMatch);
         return;
       }
 
-      // 2. No session found — search reservations (match by ID or license plate)
       try {
-        const reservationsPage = await parkingService.searchReservations({ status: 'APPROVED', size: 50 });
-        const allReservations = reservationsPage?.content || [];
-        const matchedRes = allReservations.find((r: any) =>
-          r.id?.toString() === term ||
-          r.licensePlate?.toUpperCase() === term
-        );
+        const matched = await parkingService.staffLookupSession(term);
+        applySessionResult(matched);
+        return;
+      } catch (lookupErr: any) {
+        if (lookupErr?.response?.status && lookupErr.response.status !== 404) {
+          throw lookupErr;
+        }
+      }
+
+      // 2. No session found - search reservations by direct id first, then approved plate list.
+      try {
+        let matchedRes: any | null = null;
+        if (/^\d+$/.test(term)) {
+          matchedRes = await parkingService.getReservationById(Number(term));
+        } else {
+          const reservationsPage = await parkingService.searchReservations({ status: 'APPROVED', size: 20 });
+          const allReservations = reservationsPage?.content || [];
+          matchedRes = allReservations.find((r: any) => r.licensePlate?.toUpperCase() === term) || null;
+        }
 
         if (matchedRes && matchedRes.status?.toUpperCase() === 'APPROVED') {
-          // Found an APPROVED reservation — pre-fill check-in form
           setReservationData(matchedRes);
           setReservationId(matchedRes.id);
           setLicensePlate(matchedRes.licensePlate || '');
-          // If reservation has a specific slot, pre-select it
           if (matchedRes.reservedSlotId) {
             setSelectedSlotId(matchedRes.reservedSlotId);
             setSelectedSlotCode(matchedRes.reservedSlotCode || '');
@@ -332,9 +347,8 @@ export default function ParkingSessions() {
           return;
         }
       } catch (_) {
-        // Ignore reservation search errors silently
+        // Ignore reservation search errors so staff can continue with walk-in check-in.
       }
-
       // 3. Nothing found — Guest check-in mode
       setValidationError('Không tìm thấy lượt đỗ tương ứng. Ghi nhận phương tiện chưa vào bãi.');
       setLicensePlate(term); // Prefill plate with searched term
@@ -394,32 +408,73 @@ export default function ParkingSessions() {
     });
   };
 
+  const parseReservationQr = (text: string) => {
+    const data: Record<string, string> = {};
+    text.split('|').forEach((part) => {
+      const index = part.indexOf('=');
+      if (index > -1) {
+        data[part.slice(0, index).trim().toLowerCase()] = part.slice(index + 1).trim();
+      }
+    });
+    const reservationId = Number(data.reservationid || data.reservation_id || data.id || 0);
+    const slotId = Number(data.slotid || data.slot_id || 0);
+    return {
+      reservationId: Number.isFinite(reservationId) && reservationId > 0 ? reservationId : null,
+      slotId: Number.isFinite(slotId) && slotId > 0 ? slotId : null,
+      slotCode: data.slot || data.slotcode || data.slot_code || '',
+      plate: (data.plate || data.licenseplate || data.license_plate || '').toUpperCase(),
+    };
+  };
+
+  const runReservationQrCheckIn = (qrData: { reservationId: number; slotId?: number | null; slotCode?: string; plate?: string }) => {
+    setReservationId(qrData.reservationId);
+    setLicensePlate(qrData.plate || '');
+    setSelectedSlotId(qrData.slotId || null);
+    setSelectedSlotCode(qrData.slotCode || (qrData.slotId ? `#${qrData.slotId}` : ''));
+    setValidationResult(null);
+    setValidationError(null);
+    setGateSearchQuery('');
+    checkInMutation.mutate({
+      ...(qrData.plate ? { licensePlate: qrData.plate } : {}),
+      reservationId: qrData.reservationId,
+      slotId: qrData.slotId || undefined,
+    });
+  };
+
   // Load reservation details and optionally check in immediately from QR.
-  const loadReservation = async (resId: number, autoCheckIn = false): Promise<boolean> => {
+  const loadReservation = async (
+    resId: number,
+    autoCheckIn = false,
+    qrSlotId?: number | null,
+    qrSlotCode?: string,
+    qrPlate?: string
+  ): Promise<boolean> => {
     try {
-      const reservationsPage = await parkingService.searchReservations({ status: 'APPROVED', size: 50 });
-      const allReservations = reservationsPage?.content || [];
-      const matchedRes = allReservations.find((r: any) => r.id === resId);
+      const matchedRes = await parkingService.getReservationById(resId);
       if (matchedRes && matchedRes.status?.toUpperCase() === 'APPROVED') {
-        setReservationData(matchedRes);
+        const resolvedSlotId = matchedRes.reservedSlotId || qrSlotId || undefined;
+        const resolvedSlotCode = matchedRes.reservedSlotCode || qrSlotCode || (resolvedSlotId ? `#${resolvedSlotId}` : '');
+        const resolvedPlate = matchedRes.licensePlate || qrPlate || '';
+        setReservationData({ ...matchedRes, reservedSlotId: resolvedSlotId, reservedSlotCode: resolvedSlotCode });
         setReservationId(matchedRes.id);
-        setLicensePlate(matchedRes.licensePlate || '');
-        if (matchedRes.reservedSlotId) {
-          setSelectedSlotId(matchedRes.reservedSlotId);
-          setSelectedSlotCode(matchedRes.reservedSlotCode || '');
+        setLicensePlate(resolvedPlate);
+        if (resolvedSlotId) {
+          setSelectedSlotId(resolvedSlotId);
+          setSelectedSlotCode(resolvedSlotCode);
         }
         setValidationResult(null);
         setValidationError(null);
         if (autoCheckIn) {
           checkInMutation.mutate({
-            licensePlate: matchedRes.licensePlate || '',
+            licensePlate: resolvedPlate,
             reservationId: matchedRes.id,
             vehicleId: matchedRes.vehicleId,
+            slotId: resolvedSlotId,
           });
         }
         return true;
       } else {
-        alert(`Không tìm thấy đặt chỗ được phê duyệt có mã: #${resId}`);
+        alert(`Không tìm thấy đặt chỗ đã duyệt có mã: #${resId}`);
         return false;
       }
     } catch (err: any) {
@@ -432,10 +487,18 @@ export default function ParkingSessions() {
   const handleQrScanSuccess = async (decodedText: string) => {
     setIsQrScannerOpen(false);
     const cleaned = decodedText.trim();
-    const reservationMatch = cleaned.match(/(?:^|\|)reservationId=(\d+)/i);
-    if (reservationMatch) {
-      await loadReservation(parseInt(reservationMatch[1], 10), true);
-      setGateSearchQuery('');
+    const reservationQr = parseReservationQr(cleaned);
+    if (reservationQr.reservationId) {
+      if (reservationQr.plate || reservationQr.slotId) {
+        runReservationQrCheckIn({
+          reservationId: reservationQr.reservationId,
+          slotId: reservationQr.slotId,
+          slotCode: reservationQr.slotCode,
+          plate: reservationQr.plate,
+        });
+      } else {
+        await loadReservation(reservationQr.reservationId, true);
+      }
       return;
     }
     if (qrPurpose === 'search') {
@@ -627,7 +690,7 @@ export default function ParkingSessions() {
                       <div>Biển số: <strong className="font-mono text-slate-900 uppercase">{reservationData.licensePlate}</strong></div>
                       <div>Mã đặt chỗ: <strong className="font-mono text-violet-800">#{reservationData.id}</strong></div>
                       <div>Khu vực: <strong className="text-slate-800">{reservationData.zoneName || `#${reservationData.zoneId}`}</strong></div>
-                      <div>Ô đỗ: <strong className="text-indigo-700">Hệ thống tự chọn khi check-in</strong></div>
+                      <div>Ô đỗ: <strong className="text-indigo-700">{reservationData.reservedSlotCode || `#${reservationData.reservedSlotId || 'N/A'}`}</strong></div>
                       <div className="col-span-2 text-slate-500 font-normal text-[10px]">
                         Thời gian đặt: {reservationData.startTime ? new Date(reservationData.startTime).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—'}
                         {' → '}

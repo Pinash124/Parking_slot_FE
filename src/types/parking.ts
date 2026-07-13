@@ -329,6 +329,7 @@ export interface ReservationCreateRequest {
   userId?: number;
   vehicleId: number;
   zoneId: number;
+  slotId: number;
   startTime: string;
   endTime: string;
 }

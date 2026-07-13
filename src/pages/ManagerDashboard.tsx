@@ -129,6 +129,7 @@ export default function ManagerDashboard() {
   const [newSlotCode, setNewSlotCode] = useState('');
   const [newSlotZoneId, setNewSlotZoneId] = useState('');
 
+  const [slotFilterVehicleType, setSlotFilterVehicleType] = useState('ALL');
   const [slotFilterZone, setSlotFilterZone] = useState('ALL');
   const [slotFilterStatus, setSlotFilterStatus] = useState('ALL');
 
@@ -171,11 +172,47 @@ export default function ManagerDashboard() {
     setNewSlotCode('');
   };
 
+  const getVehicleFilterGroup = (name?: string) => {
+    const normalized = (name || '').toUpperCase();
+    if (normalized.includes('MOTOR') || normalized.includes('BIKE') || normalized.includes('MOTORBIKE')) return 'TWO_WHEEL';
+    if (normalized.includes('CAR') || normalized.includes('AUTO') || normalized.includes('OTOMOBILE')) return 'FOUR_WHEEL';
+    return 'OTHER';
+  };
+
+  const getSlotVehicleTypeName = (slot: any) => {
+    if (slot.vehicleTypeName) return slot.vehicleTypeName;
+    return zones.find((zone) => zone.id === slot.zoneId)?.vehicleTypeName || '';
+  };
+
+  const formatVehicleTypeLabel = (name?: string) => {
+    const group = getVehicleFilterGroup(name);
+    if (group === 'TWO_WHEEL') return 'Motorbike';
+    if (group === 'FOUR_WHEEL') return 'Car';
+    return name || 'Other';
+  };
+
+  const formatZoneName = (name?: string) => {
+    const rawName = name || '';
+    const normalized = rawName.toUpperCase();
+    const floor = normalized.match(/^F\d+/)?.[0] || '';
+    if (normalized.includes('MOTORBIKE')) return floor ? `${floor} - Motorbike` : 'Motorbike';
+    if (normalized.includes('CAR-MONTHLY')) return floor ? `${floor} - Car Monthly` : 'Car Monthly';
+    if (normalized.includes('CAR-NORMAL')) return floor ? `${floor} - Car Normal` : 'Car Normal';
+    return rawName || 'Unknown zone';
+  };
+
+  const formatZoneOptionLabel = (zone: any) => `${formatZoneName(zone.zoneName)} (${formatVehicleTypeLabel(zone.vehicleTypeName)})`;
+
+  const zoneOptionsForSlotFilter = zones.filter((zone) =>
+    slotFilterVehicleType === 'ALL' || getVehicleFilterGroup(zone.vehicleTypeName) === slotFilterVehicleType
+  );
+
   // Filter slots
   const filteredSlots = slots.filter((s) => {
+    const vehicleTypeMatch = slotFilterVehicleType === 'ALL' || getVehicleFilterGroup(getSlotVehicleTypeName(s)) === slotFilterVehicleType;
     const zoneMatch = slotFilterZone === 'ALL' || String(s.zoneId) === slotFilterZone;
     const statusMatch = slotFilterStatus === 'ALL' || s.status === slotFilterStatus;
-    return zoneMatch && statusMatch;
+    return vehicleTypeMatch && zoneMatch && statusMatch;
   });
 
   return (
@@ -345,7 +382,7 @@ export default function ManagerDashboard() {
                       <tr key={zone.id} className="hover:bg-slate-50 transition">
                         <td className="py-3.5 font-bold text-slate-800">{zone.zoneName}</td>
                         <td className="py-3.5 font-semibold text-slate-500">{zone.floorName || `Tầng #${zone.floorId}`}</td>
-                        <td className="py-3.5 font-medium text-slate-650">{zone.vehicleTypeName || `Loại xe #${zone.vehicleTypeId}`}</td>
+                        <td className="py-3.5 font-medium text-slate-650">{formatVehicleTypeLabel(zone.vehicleTypeName) || `Type #${zone.vehicleTypeId}`}</td>
                         <td className="py-3.5 text-right font-bold text-indigo-600">{zone.id ? slots.filter(s => s.zoneId === zone.id).length : 0} slots</td>
                       </tr>
                     ))}
@@ -468,7 +505,7 @@ export default function ManagerDashboard() {
                       <option value="">-- Chọn Phân Khu --</option>
                       {zones.map((z) => (
                         <option key={z.id} value={z.id}>
-                          {z.zoneName} ({z.vehicleTypeName})
+                          {formatZoneOptionLabel(z)}
                         </option>
                       ))}
                     </select>
@@ -484,37 +521,54 @@ export default function ManagerDashboard() {
 
               {/* Filters */}
               <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-3.5">
-                <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Lọc Danh Sách Slot</h3>
+                <h3 className="text-sm font-bold text-slate-800 border-b border-slate-100 pb-2">Filter Slot List</h3>
                 <div className="text-xs space-y-3">
                   <div>
-                    <label className="block font-bold text-slate-500 mb-1">Lọc theo Khu Vực</label>
+                    <label className="block font-bold text-slate-500 mb-1">Vehicle Type</label>
+                    <select
+                      value={slotFilterVehicleType}
+                      onChange={(e) => {
+                        setSlotFilterVehicleType(e.target.value);
+                        setSlotFilterZone('ALL');
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
+                    >
+                      <option value="ALL">All vehicle types</option>
+                      <option value="TWO_WHEEL">Motorbike</option>
+                      <option value="FOUR_WHEEL">Car</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-slate-500 mb-1">Zone</label>
                     <select
                       value={slotFilterZone}
                       onChange={(e) => setSlotFilterZone(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
                     >
-                      <option value="ALL">Tất cả phân khu</option>
-                      {zones.map((z) => (
+                      <option value="ALL">All zones</option>
+                      {zoneOptionsForSlotFilter.map((z) => (
                         <option key={z.id} value={String(z.id)}>
-                          {z.zoneName} ({z.vehicleTypeName})
+                          {formatZoneOptionLabel(z)}
                         </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
-                    <label className="block font-bold text-slate-500 mb-1">Lọc theo Trạng Thái</label>
+                    <label className="block font-bold text-slate-500 mb-1">Status</label>
                     <select
                       value={slotFilterStatus}
                       onChange={(e) => setSlotFilterStatus(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-800 focus:outline-none font-semibold"
                     >
-                      <option value="ALL">Tất cả trạng thái</option>
-                      <option value="AVAILABLE">Trống (AVAILABLE)</option>
-                      <option value="OCCUPIED">Đang sử dụng (OCCUPIED)</option>
-                      <option value="RESERVED">Đã đặt trước (RESERVED)</option>
-                      <option value="MAINTENANCE">Bảo trì (MAINTENANCE)</option>
-                      <option value="LOCKED">Khóa (LOCKED)</option>
+                      <option value="ALL">All statuses</option>
+                      <option value="AVAILABLE">Available</option>
+                      <option value="OCCUPIED">Occupied</option>
+                      <option value="RESERVED">Reserved</option>
+                      <option value="MAINTENANCE">Maintenance</option>
+                      <option value="LOCKED">Locked</option>
                     </select>
                   </div>
                 </div>
@@ -524,19 +578,18 @@ export default function ManagerDashboard() {
             {/* Right: Graphic Grid View */}
             <div className="lg:col-span-3 bg-white border border-slate-200 p-6 rounded-2xl shadow-sm space-y-4">
               <div className="flex justify-between items-center border-b border-slate-100 pb-3">
-                <h3 className="text-sm font-bold text-slate-800">Sơ Đồ Lưới Trạng Thái Vị Trí Slot Đỗ</h3>
-                <span className="text-xs text-slate-400 font-semibold">Hiển thị {filteredSlots.length} slot</span>
+                <h3 className="text-sm font-bold text-slate-800">Slot Status Grid</h3>
+                <span className="text-xs text-slate-400 font-semibold">Showing {filteredSlots.length} slots</span>
               </div>
 
               {/* Status Labels Legend */}
               <div className="flex flex-wrap gap-3 text-[10px] font-bold text-slate-500 mb-4 bg-slate-50/50 p-2.5 rounded-xl border border-slate-200">
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-md mr-1.5"></span>Trống</span>
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-rose-500 rounded-md mr-1.5"></span>Đang sử dụng</span>
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-md mr-1.5"></span>Đã đặt trước</span>
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-amber-500 rounded-md mr-1.5"></span>Bảo trì</span>
-                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-slate-400 rounded-md mr-1.5"></span>Tạm khóa</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-emerald-500 rounded-md mr-1.5"></span>Available</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-rose-500 rounded-md mr-1.5"></span>Occupied</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-indigo-500 rounded-md mr-1.5"></span>Reserved</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-amber-500 rounded-md mr-1.5"></span>Maintenance</span>
+                <span className="flex items-center"><span className="w-2.5 h-2.5 bg-slate-400 rounded-md mr-1.5"></span>Locked</span>
               </div>
-
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {filteredSlots.map((slot) => {
                   let statusBg = 'bg-emerald-50 border-emerald-200 text-emerald-800';
@@ -563,8 +616,8 @@ export default function ManagerDashboard() {
                       </div>
                       
                       <div className="text-[10px] space-y-0.5 opacity-90">
-                        <p className="font-bold">Khu vực: {slot.zoneName || `Khu #${slot.zoneId}`}</p>
-                        <p className="font-medium">Loại: {slot.vehicleTypeName || 'N/A'}</p>
+                        <p className="font-bold">Zone: {formatZoneName(slot.zoneName) || `Zone #${slot.zoneId}`}</p>
+                        <p className="font-medium">Type: {formatVehicleTypeLabel(slot.vehicleTypeName)}</p>
                       </div>
 
                       {/* Dropdown status toggler */}
@@ -574,11 +627,11 @@ export default function ManagerDashboard() {
                           onChange={(e) => updateSlotStatusMutation.mutate({ id: slot.id, status: e.target.value })}
                           className="bg-white hover:bg-slate-50 border border-slate-250 text-[10px] font-bold rounded-lg px-1.5 py-0.5 text-slate-700 cursor-pointer focus:outline-none"
                         >
-                          <option value="AVAILABLE">Đặt Trống</option>
-                          <option value="OCCUPIED">Đang Sử Dụng</option>
-                          <option value="RESERVED">Đặt Trước</option>
-                          <option value="MAINTENANCE">Bảo Trì</option>
-                          <option value="LOCKED">Khóa</option>
+                          <option value="AVAILABLE">Available</option>
+                          <option value="OCCUPIED">Occupied</option>
+                          <option value="RESERVED">Reserved</option>
+                          <option value="MAINTENANCE">Maintenance</option>
+                          <option value="LOCKED">Locked</option>
                         </select>
                       </div>
                     </div>
@@ -588,7 +641,7 @@ export default function ManagerDashboard() {
 
               {filteredSlots.length === 0 && (
                 <div className="text-center py-12 text-slate-400 text-xs">
-                  Không tìm thấy slot đỗ xe nào trùng khớp điều kiện lọc.
+                  No slots match the selected filters.
                 </div>
               )}
             </div>

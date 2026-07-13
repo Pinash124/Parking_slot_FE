@@ -134,25 +134,29 @@ export const userPortalService = {
 
   // ========== USER PORTAL NEW PAYMENTS & SERVICES ==========
   getUserPortalCurrentSession: async (): Promise<CurrentParkingSessionResponse[]> => {
-    const response = await api.get<any[]>('/api/user/parking-sessions/current');
-    return response.data.map(item => ({
-      sessionId: item.session.id,
-      reservationId: item.session.reservationId,
-      vehicleId: item.session.vehicleId,
-      ticketCode: item.session.ticketCode,
-      status: item.session.status,
-      slotCode: item.session.slotCode,
-      zoneName: item.session.zoneName,
-      vehicleTypeName: item.session.vehicleTypeName,
-      licensePlate: item.session.licensePlate,
-      entryTime: item.session.entryTime,
-      estimatedFee: item.estimatedGrandTotal || (item.temporaryQuote?.totalFee) || 0,
-      additionalServices: item.additionalServices?.map((svc: any) => ({
-        serviceId: svc.serviceId,
-        serviceName: svc.serviceName,
-        price: svc.unitPrice || svc.price || 0,
-      })) || [],
-    }));
+    const response = await api.get<any>('/api/user/parking-sessions/current');
+    const items = Array.isArray(response.data) ? response.data : (response.data ? [response.data] : []);
+    return items.map((item: any) => {
+      const session = item.session || item;
+      return {
+        sessionId: session.id || session.sessionId,
+        reservationId: session.reservationId,
+        vehicleId: session.vehicleId,
+        ticketCode: session.ticketCode,
+        status: session.status,
+        slotCode: session.slotCode,
+        zoneName: session.zoneName,
+        vehicleTypeName: session.vehicleTypeName,
+        licensePlate: session.licensePlate,
+        entryTime: session.entryTime,
+        estimatedFee: item.estimatedGrandTotal || (item.temporaryQuote?.totalFee) || session.estimatedFee || 0,
+        additionalServices: item.additionalServices?.map((svc: any) => ({
+          serviceId: svc.serviceId,
+          serviceName: svc.serviceName,
+          price: svc.unitPrice || svc.price || 0,
+        })) || [],
+      };
+    });
   },
 
   addUserPortalService: async (payload: { sessionId: number; serviceId: number }): Promise<CurrentParkingSessionResponse> => {

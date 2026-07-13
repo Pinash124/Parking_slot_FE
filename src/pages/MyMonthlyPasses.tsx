@@ -75,6 +75,24 @@ export default function MyMonthlyPasses() {
     enabled: !!selectedZoneId && !!selectedVehicleTypeId,
   });
 
+  // Monthly passes only use MONTHLY zones; pick the valid zone automatically after choosing a floor.
+  useEffect(() => {
+    if (!selectedFloorId) return;
+
+    const firstZone = zones[0];
+    if (!firstZone) {
+      if (selectedZoneId) setSelectedZoneId('');
+      setSelectedSlotId('');
+      return;
+    }
+
+    const nextZoneId = String(firstZone.id);
+    if (selectedZoneId !== nextZoneId) {
+      setSelectedZoneId(nextZoneId);
+      setSelectedSlotId('');
+    }
+  }, [selectedFloorId, zones, selectedZoneId]);
+
   // Calculate live price estimation
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
   useEffect(() => {
@@ -301,7 +319,7 @@ export default function MyMonthlyPasses() {
                 <div>
                   <label className="block text-slate-500 mb-1">Phân khu (Zone)</label>
                   <select
-                    disabled={!selectedFloorId}
+                    disabled={!selectedFloorId || zones.length <= 1}
                     value={selectedZoneId}
                     onChange={(e) => {
                       setSelectedZoneId(e.target.value);
