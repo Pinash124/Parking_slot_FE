@@ -737,7 +737,7 @@ export default function ManagerDashboard() {
                 <div className="space-y-3.5 text-xs pt-2">
                   <div>
                     <div className="flex justify-between font-bold text-slate-700 mb-1">
-                      <span>Ô Tô (CAR)</span>
+                      <span>Ô tô</span>
                       <span>{( (stats?.todayRevenue ?? 0) * 0.7 ).toLocaleString('vi-VN')}đ (70%)</span>
                     </div>
                     <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
@@ -747,7 +747,7 @@ export default function ManagerDashboard() {
 
                   <div>
                     <div className="flex justify-between font-bold text-slate-700 mb-1">
-                      <span>Xe Máy (BIKE)</span>
+                      <span>Xe 2 bánh</span>
                       <span>{( (stats?.todayRevenue ?? 0) * 0.2 ).toLocaleString('vi-VN')}đ (20%)</span>
                     </div>
                     <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
@@ -757,7 +757,7 @@ export default function ManagerDashboard() {
 
                   <div>
                     <div className="flex justify-between font-bold text-slate-700 mb-1">
-                      <span>Phương tiện khác (EV / Small Truck)</span>
+                      <span>Phương tiện khác</span>
                       <span>{( (stats?.todayRevenue ?? 0) * 0.1 ).toLocaleString('vi-VN')}đ (10%)</span>
                     </div>
                     <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">

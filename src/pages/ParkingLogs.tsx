@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { parkingService } from '../services/parkingService';
 import Header from '../components/Header';
+import { formatParkingSessionStatusName, isCompletedParkingSessionStatus, formatSlotCodeName } from '../utils/vehicleDisplay';
 
 export default function ParkingLogs() {
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -15,14 +16,17 @@ export default function ParkingLogs() {
   });
 
   // Calculate stats based on fetched sessions
-  const totalCompleted = sessions?.filter(s => s.status === 'COMPLETED' || s.status === 'CHECKED_OUT').length || 0;
-  const totalRevenue = sessions?.filter(s => s.status === 'COMPLETED' || s.status === 'CHECKED_OUT').reduce((acc, curr) => acc + (curr.totalFee || curr.parkingFee || 0), 0) || 0;
+  const totalCompleted = sessions?.filter(s => isCompletedParkingSessionStatus(s.status)).length || 0;
+  const totalRevenue = sessions?.filter(s => isCompletedParkingSessionStatus(s.status)).reduce((acc, curr) => acc + (curr.totalFee || curr.parkingFee || 0), 0) || 0;
   const totalActive = sessions?.filter(s => s.status === 'ACTIVE').length || 0;
 
   // Filter & search logic
   const filteredSessions = sessions?.filter((session) => {
     // 1. Status Filter
-    if (statusFilter !== 'ALL' && session.status !== statusFilter) {
+    if (statusFilter === 'COMPLETED_GROUP' && !isCompletedParkingSessionStatus(session.status)) {
+      return false;
+    }
+    if (statusFilter !== 'ALL' && statusFilter !== 'COMPLETED_GROUP' && session.status !== statusFilter) {
       return false;
     }
     // 2. Search Query (Ticket code, slot code, license plate)
@@ -108,15 +112,15 @@ export default function ParkingLogs() {
                   statusFilter === 'ACTIVE' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                Đang hoạt động (ACTIVE)
+                Đang đỗ
               </button>
               <button 
-                onClick={() => setStatusFilter('CHECKED_OUT')}
+                onClick={() => setStatusFilter('COMPLETED_GROUP')}
                 className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
-                  statusFilter === 'CHECKED_OUT' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                  statusFilter === 'COMPLETED_GROUP' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                Đã hoàn thành (CHECKED_OUT)
+                Đã hoàn thành
               </button>
             </div>
 
@@ -165,7 +169,7 @@ export default function ParkingLogs() {
                       <td className="px-6 py-3.5 font-mono text-slate-500">#{session.id}</td>
                       <td className="px-6 py-3.5 font-bold text-slate-800">{session.ticketCode}</td>
                       <td className="px-6 py-3.5 text-slate-600">{session.licensePlate || `Xe #${session.vehicleId}`}</td>
-                      <td className="px-6 py-3.5 text-slate-600">{session.slotCode || `Slot #${session.slotId}`}</td>
+                      <td className="px-6 py-3.5 text-slate-600">{formatSlotCodeName(session.slotCode) || `Ô đỗ #${session.slotId}`}</td>
                       <td className="px-6 py-3.5 text-slate-500">
                         {session.entryTime ? new Date(session.entryTime).toLocaleString('vi-VN') : '-'}
                       </td>
@@ -177,13 +181,13 @@ export default function ParkingLogs() {
                       </td>
                       <td className="px-6 py-3.5">
                         <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          session.status === 'COMPLETED' || session.status === 'CHECKED_OUT'
+                          isCompletedParkingSessionStatus(session.status)
                             ? 'bg-emerald-100 text-emerald-700' 
                             : session.status === 'ACTIVE'
                               ? 'bg-indigo-100 text-indigo-700'
                               : 'bg-amber-100 text-amber-700'
                         }`}>
-                          {session.status === 'COMPLETED' || session.status === 'CHECKED_OUT' ? 'Hoàn thành' : session.status === 'ACTIVE' ? 'Đang đỗ' : session.status}
+                          {formatParkingSessionStatusName(session.status)}
                         </span>
                       </td>
                     </tr>

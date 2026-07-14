@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
-import { formatVehicleTypeName, formatSlotCodeName, formatSlotStatusName } from '../utils/vehicleDisplay';
+import { formatVehicleTypeName, formatSlotCodeName, formatSlotStatusName, formatDeviceStatusName } from '../utils/vehicleDisplay';
 import QrScannerModal from '../components/QrScannerModal';
 import { adminService } from '../services/adminService';
 import { parkingService } from '../services/parkingService';
@@ -1125,7 +1125,7 @@ export default function AdminDashboard() {
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${
                             dev.status === 'ONLINE' ? 'bg-emerald-50 text-emerald-705 border-emerald-100' : 'bg-rose-50 text-rose-705 border-rose-100'
                           }`}>
-                            {dev.status}
+                            {formatDeviceStatusName(dev.status)}
                           </span>
                         </td>
                         <td className="py-3.5 pl-4 text-right">

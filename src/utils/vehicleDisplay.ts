@@ -63,6 +63,31 @@ export const formatSlotStatusName = (status?: string) => {
   }
 };
 
+export const formatParkingSessionStatusName = (status?: string) => {
+  switch ((status || '').toUpperCase()) {
+    case 'ACTIVE': return 'Đang đỗ';
+    case 'PAYMENT_PENDING': return 'Chờ thanh toán';
+    case 'CHECKED_OUT':
+    case 'COMPLETED': return 'Đã hoàn thành';
+    case 'CANCELLED': return 'Đã hủy';
+    default: return status || 'Chưa rõ';
+  }
+};
+
+export const isCompletedParkingSessionStatus = (status?: string) => {
+  const normalized = (status || '').toUpperCase();
+  return normalized === 'CHECKED_OUT' || normalized === 'COMPLETED';
+};
+
+export const formatDeviceStatusName = (status?: string) => {
+  switch ((status || '').toUpperCase()) {
+    case 'ONLINE': return 'Đang kết nối';
+    case 'OFFLINE': return 'Mất kết nối';
+    case 'MAINTENANCE': return 'Bảo trì';
+    default: return status || 'Chưa rõ';
+  }
+};
+
 export const formatPricingPolicyName = (name?: string) => {
   const normalized = (name || '').toUpperCase();
   if (normalized.includes('MOTORBIKE') || normalized.includes('XE 2')) return 'Chính sách xe 2 bánh';

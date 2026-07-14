@@ -269,8 +269,8 @@ export default function AdminUsers() {
                   onChange={(e) => setStatus(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-4 py-2.5 text-xs focus:outline-none"
                 >
-                  <option value="ACTIVE">Kích hoạt (ACTIVE)</option>
-                  <option value="LOCKED">Khóa (LOCKED)</option>
+                  <option value="ACTIVE">Kích hoạt</option>
+                  <option value="LOCKED">Khóa</option>
                 </select>
               </div>
 

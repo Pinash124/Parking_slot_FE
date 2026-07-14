@@ -95,6 +95,13 @@ export default function MyMonthlyPasses() {
   }, [selectedFloorId, zones, selectedZoneId]);
 
   // Calculate live price estimation
+  const monthlyPassDiscountRate = (monthCount: number) => {
+    if (monthCount >= 12) return 0.15;
+    if (monthCount >= 6) return 0.10;
+    if (monthCount >= 3) return 0.05;
+    return 0;
+  };
+
   const [estimatedPrice, setEstimatedPrice] = useState<number>(0);
   useEffect(() => {
     if (selectedVehicleTypeId && pricingPolicies.length > 0) {
@@ -102,7 +109,8 @@ export default function MyMonthlyPasses() {
         (p) => p.vehicleTypeId === selectedVehicleTypeId
       );
       if (policy && policy.monthlyRate) {
-        setEstimatedPrice(policy.monthlyRate * months);
+        const grossPrice = policy.monthlyRate * months;
+        setEstimatedPrice(Math.round(grossPrice * (1 - monthlyPassDiscountRate(months))));
       } else {
         setEstimatedPrice(0);
       }

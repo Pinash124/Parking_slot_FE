@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { parkingService } from '../services/parkingService';
 import { userPortalService } from '../services/userPortalService';
 import Header from '../components/Header';
-import { formatParkingZoneName, formatVehicleTypeName, formatSlotCodeName } from '../utils/vehicleDisplay';
+import { formatParkingZoneName, formatVehicleTypeName, formatSlotCodeName, formatParkingSessionStatusName, isCompletedParkingSessionStatus } from '../utils/vehicleDisplay';
 import QrScannerModal from '../components/QrScannerModal';
 
 
@@ -583,7 +583,9 @@ export default function ParkingSessions() {
 
     const matchesStatus =
       !historyStatusFilter ||
-      session.status?.toUpperCase() === historyStatusFilter.toUpperCase();
+      (historyStatusFilter === 'COMPLETED_GROUP'
+        ? isCompletedParkingSessionStatus(session.status)
+        : session.status?.toUpperCase() === historyStatusFilter.toUpperCase());
 
     return matchesQuery && matchesStatus;
   });
@@ -742,11 +744,11 @@ export default function ParkingSessions() {
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
                         validationResult.status === 'ACTIVE'
                           ? 'bg-amber-50 text-amber-800 border-amber-200'
-                          : validationResult.status === 'COMPLETED'
+                          : isCompletedParkingSessionStatus(validationResult.status)
                           ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                           : 'bg-indigo-50 text-indigo-805 border-indigo-200'
                       }`}>
-                        {validationResult.status}
+                        {formatParkingSessionStatusName(validationResult.status)}
                       </span>
                     </div>
 
@@ -1083,10 +1085,9 @@ export default function ParkingSessions() {
                   className="bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none cursor-pointer"
                 >
                   <option value="">-- Trạng thái (Tất cả) --</option>
-                  <option value="ACTIVE">Đang đỗ (ACTIVE)</option>
-                  <option value="COMPLETED">Rời bãi (COMPLETED)</option>
-                  <option value="PAYMENT_PENDING">Chờ thanh toán (PAYMENT_PENDING)</option>
-                  <option value="CHECKED_OUT">Đã tính phí (CHECKED_OUT)</option>
+                  <option value="ACTIVE">Đang đỗ</option>
+                  <option value="COMPLETED_GROUP">Đã hoàn thành</option>
+                  <option value="PAYMENT_PENDING">Chờ thanh toán</option>
                 </select>
 
                 <button
@@ -1137,11 +1138,11 @@ export default function ParkingSessions() {
                           <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold uppercase tracking-wide border ${
                             session.status?.toUpperCase() === 'ACTIVE'
                               ? 'bg-amber-50 text-amber-800 border-amber-200'
-                              : session.status?.toUpperCase() === 'COMPLETED'
+                              : isCompletedParkingSessionStatus(session.status)
                               ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                               : 'bg-indigo-50 text-indigo-805 border-indigo-200'
                           }`}>
-                            {session.status}
+                            {formatParkingSessionStatusName(session.status)}
                           </span>
                         </td>
                       </tr>
