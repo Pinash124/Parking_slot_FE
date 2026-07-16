@@ -296,8 +296,8 @@ export default function DriverDashboard() {
                   <thead>
                     <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
                       <th className="pb-3 pr-4">Loại xe</th>
-                      <th className="pb-3 px-4 text-right">Phí theo giờ (1h đầu)</th>
-                      <th className="pb-3 px-4 text-right">Phí theo ngày (24h)</th>
+                      <th className="pb-3 px-4 text-right">Qua đêm / giờ (1h đầu)</th>
+                      <th className="pb-3 px-4 text-right">Lượt ban ngày (24h)</th>
                       <th className="pb-3 pl-4 text-right">Mất thẻ/Vé phạt</th>
                     </tr>
                   </thead>

@@ -18,7 +18,6 @@ export default function AdminPolicies() {
   const [dailyRate, setDailyRate] = useState('');
   const [surcharge, setSurcharge] = useState('0');
   const [lostTicketFee, setLostTicketFee] = useState('50000');
-  const [overtimeFee, setOvertimeFee] = useState('10000');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
@@ -77,7 +76,6 @@ export default function AdminPolicies() {
     setDailyRate('');
     setSurcharge('0');
     setLostTicketFee('50000');
-    setOvertimeFee('10000');
     setStartDate('');
     setEndDate('');
     setNameError(null);
@@ -93,7 +91,6 @@ export default function AdminPolicies() {
     setDailyRate(p.dailyRate?.toString() || '');
     setSurcharge(p.surcharge?.toString() || '0');
     setLostTicketFee(p.lostTicketFee?.toString() || '50000');
-    setOvertimeFee(p.overtimeFee?.toString() || '10000');
     setStartDate(p.startDate ? p.startDate.split('T')[0] : '');
     setEndDate(p.endDate ? p.endDate.split('T')[0] : '');
   };
@@ -123,7 +120,7 @@ export default function AdminPolicies() {
     }
 
     if (!hourlyRate || !dailyRate) {
-      setRateError('Vui lòng điền đầy đủ phí theo giờ và theo ngày.');
+      setRateError('Vui lòng điền đầy đủ phí qua đêm và lượt ban ngày.');
       isValid = false;
     } else {
       setRateError(null);
@@ -140,7 +137,7 @@ export default function AdminPolicies() {
       dailyRate: parseFloat(dailyRate),
       surcharge: parseFloat(surcharge),
       lostTicketFee: parseFloat(lostTicketFee),
-      overtimeFee: parseFloat(overtimeFee),
+      overtimeFee: 0,
       startDate: startDate ? new Date(startDate).toISOString() : undefined,
       endDate: endDate ? new Date(endDate).toISOString() : undefined,
     });
@@ -154,7 +151,7 @@ export default function AdminPolicies() {
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-2xl font-extrabold text-slate-800 tracking-tight">Cấu Hình Biểu Phí Gửi Xe (Pricing Policies)</h1>
-          <p className="text-slate-450 text-xs mt-1">Điều chỉnh giá cước gửi xe theo giờ/ngày, phí phạt mất vé và thời gian áp dụng biểu phí</p>
+          <p className="text-slate-450 text-xs mt-1">Điều chỉnh giá cước gửi xe theo lượt ban ngày / qua đêm theo giờ, phí phạt mất vé và thời gian áp dụng biểu phí</p>
         </div>
 
         {/* Grid Split */}
@@ -214,7 +211,7 @@ export default function AdminPolicies() {
               {/* Rates */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-455 mb-1 uppercase tracking-wide">Phí theo giờ (VND) *</label>
+                  <label className="block text-slate-455 mb-1 uppercase tracking-wide">Qua đêm / giờ (VND) *</label>
                   <input
                     type="number"
                     required
@@ -225,7 +222,7 @@ export default function AdminPolicies() {
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-455 mb-1 uppercase tracking-wide">Phí theo ngày (VND) *</label>
+                  <label className="block text-slate-455 mb-1 uppercase tracking-wide">Lượt ban ngày (VND) *</label>
                   <input
                     type="number"
                     required
@@ -239,22 +236,13 @@ export default function AdminPolicies() {
               {rateError && <p className="text-[10px] text-rose-500 font-medium">{rateError}</p>}
 
               {/* Penalty and Services */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-slate-450 mb-1 uppercase text-[9px]">Phí phạt vé (VND)</label>
                   <input
                     type="number"
                     value={lostTicketFee}
                     onChange={(e) => setLostTicketFee(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-2 py-2 text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-455 mb-1 uppercase text-[9px]">Phí quá giờ/h</label>
-                  <input
-                    type="number"
-                    value={overtimeFee}
-                    onChange={(e) => setOvertimeFee(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-2 py-2 text-xs focus:outline-none"
                   />
                 </div>
@@ -321,8 +309,8 @@ export default function AdminPolicies() {
                     <thead>
                       <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase text-[10px] tracking-wider">
                         <th className="pb-3.5 pr-4">Biểu phí</th>
-                        <th className="pb-3.5 px-4 text-right">Phí theo giờ</th>
-                        <th className="pb-3.5 px-4 text-right">Phí theo ngày</th>
+                        <th className="pb-3.5 px-4 text-right">Qua đêm / giờ</th>
+                        <th className="pb-3.5 px-4 text-right">Lượt ban ngày</th>
                         <th className="pb-3.5 px-4 text-right">Phí phạt mất vé</th>
                         <th className="pb-3.5 px-4">Ngày áp dụng</th>
                         <th className="pb-3.5 pl-4 text-right">Thao tác</th>

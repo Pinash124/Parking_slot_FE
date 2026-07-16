@@ -21,6 +21,7 @@ export default function MyReservations() {
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [reservationSortDirection, setReservationSortDirection] = useState<'desc' | 'asc'>('desc');
+  const [reservationStatusFilter, setReservationStatusFilter] = useState('ALL');
 
   // Form Errors
   const [vehicleError, setVehicleError] = useState<string | null>(null);
@@ -131,11 +132,6 @@ export default function MyReservations() {
     queryFn: () => userPortalService.getMyReservations(0, 100),
   });
   const reservations = reservationsData?.content || [];
-  const sortedReservations = [...reservations].sort((a: any, b: any) => {
-    const aId = Number(a.id || 0);
-    const bId = Number(b.id || 0);
-    return reservationSortDirection === 'asc' ? aId - bId : bId - aId;
-  });
 
 
   // Trigger floor fetch when building changes
@@ -374,6 +370,24 @@ export default function MyReservations() {
     const s = reservation?.status?.toUpperCase();
     return s === 'REJECTED' || s === 'FAILED' || s === 'FAILURE' || ((s === 'APPROVED' || s === 'CONFIRMED' || s === 'COMPLETED') && isPastReservation(reservation));
   };
+
+  const getReservationFilterKey = (reservation: any) => {
+    const s = reservation?.status?.toUpperCase();
+    if (s === 'PENDING') return 'PENDING';
+    if (s === 'CANCELLED') return 'CANCELLED';
+    if (s === 'REJECTED' || s === 'FAILED' || s === 'FAILURE') return 'FAILED';
+    if ((s === 'APPROVED' || s === 'CONFIRMED' || s === 'COMPLETED') && isPastReservation(reservation)) return 'FAILED';
+    if (s === 'APPROVED' || s === 'CONFIRMED' || s === 'COMPLETED') return 'SUCCESS';
+    return 'OTHER';
+  };
+
+  const visibleReservations = reservations
+    .filter((reservation: any) => reservationStatusFilter === 'ALL' || getReservationFilterKey(reservation) === reservationStatusFilter)
+    .sort((a: any, b: any) => {
+      const aId = Number(a.id || 0);
+      const bId = Number(b.id || 0);
+      return reservationSortDirection === 'asc' ? aId - bId : bId - aId;
+    });
 
   const getReservedSlotCode = (reservation: any) => {
     return reservation?.reservedSlotCode
@@ -631,16 +645,32 @@ export default function MyReservations() {
               Lịch sử đặt lịch của bạn
             </h3>
 
-            <div className="flex items-center justify-end gap-2 mb-4">
-              <span className="text-[10px] font-bold uppercase text-slate-400">Sắp xếp mã đặt chỗ</span>
-              <select
-                value={reservationSortDirection}
-                onChange={(e) => setReservationSortDirection(e.target.value as 'desc' | 'asc')}
-                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500"
-              >
-                <option value="desc">Giảm dần</option>
-                <option value="asc">Tăng dần</option>
-              </select>
+            <div className="flex flex-wrap items-center justify-end gap-3 mb-4">
+              <label className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Lọc trạng thái</span>
+                <select
+                  value={reservationStatusFilter}
+                  onChange={(e) => setReservationStatusFilter(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500"
+                >
+                  <option value="ALL">Tất cả</option>
+                  <option value="PENDING">Chờ duyệt</option>
+                  <option value="SUCCESS">Đặt thành công</option>
+                  <option value="FAILED">Không thành công</option>
+                  <option value="CANCELLED">Đã hủy</option>
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Sắp xếp mã đặt chỗ</span>
+                <select
+                  value={reservationSortDirection}
+                  onChange={(e) => setReservationSortDirection(e.target.value as 'desc' | 'asc')}
+                  className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-[11px] font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500"
+                >
+                  <option value="desc">Giảm dần</option>
+                  <option value="asc">Tăng dần</option>
+                </select>
+              </label>
             </div>
 
             {isHistoryLoading ? (
@@ -649,7 +679,7 @@ export default function MyReservations() {
                 <p className="text-xs text-slate-400 font-semibold mt-3">Đang tải lịch sử đặt chỗ...</p>
               </div>
             ) : (
-              sortedReservations.length === 0 ? (
+              visibleReservations.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center text-slate-400 py-20">
                   <svg className="w-12 h-12 mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -670,7 +700,7 @@ export default function MyReservations() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50 font-medium text-slate-700">
-                      {sortedReservations.map((r: any) => {
+                      {visibleReservations.map((r: any) => {
                         const code = r.ticketCode || `#RSV-${r.id}`;
                         const isExpired = isPastReservation(r);
                         const isCancellable = (r.status?.toUpperCase() === 'PENDING' || r.status?.toUpperCase() === 'APPROVED') && !isExpired;

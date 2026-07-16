@@ -53,6 +53,36 @@ export interface ManagerOverviewReport {
   peakHours?: Record<string, number> | null;
 }
 
+export interface ManagerVehicleTypeSummary {
+  vehicleTypeId: number;
+  vehicleTypeName?: string;
+  entries: number;
+  exits: number;
+  parked: number;
+  totalSlots: number;
+  availableSlots: number;
+  revenue: number;
+}
+
+export interface ManagerReportResponse {
+  from: string;
+  to: string;
+  entries: number;
+  exits: number;
+  currentlyParked: number;
+  revenue: number;
+  totalSlots: number;
+  availableSlots: number;
+  occupiedSlots: number;
+  reservedSlots: number;
+  maintenanceSlots: number;
+  lockedSlots: number;
+  occupancyRate: number;
+  peakHours?: Record<string, number> | null;
+  revenueByDay?: Record<string, number> | null;
+  byVehicleType?: ManagerVehicleTypeSummary[];
+}
+
 export interface DashboardOverviewResponse {
   totalReservations: number;
   pendingReservations: number;
@@ -110,6 +140,16 @@ export interface ParkingSessionResponse {
   paymentMethod?: string | null;
   entryStaffId?: number | null;
   exitStaffId?: number | null;
+}
+
+export interface FloorOccupancyResponse {
+  floorId: number;
+  floorName?: string;
+  floorNumber?: number;
+  carUsed: number;
+  carTotal: number;
+  twoWheelUsed: number;
+  twoWheelTotal: number;
 }
 
 // Current parking session response (for user portal)
@@ -224,12 +264,14 @@ export interface ZoneView {
   vehicleTypeId: number;
   vehicleTypeName?: string;
   zoneName: string;
+  zoneType?: string;
 }
 
 export interface ZoneRequest {
   floorId: number;
   vehicleTypeId: number;
   zoneName: string;
+  zoneType?: string;
 }
 
 export interface SlotView {
@@ -258,7 +300,11 @@ export interface PricingView {
   vehicleTypeName?: string;
   policyName: string;
   hourlyRate?: number;
+  hourlyBillingMode?: string;
+  hourlyBillingBlockHours?: number;
   dailyRate?: number;
+  dailyBillingMode?: string;
+  dailyBillingBlockHours?: number;
   monthlyRate?: number;
   fixedSurcharge?: number;
   lostTicketFee?: number;
@@ -272,7 +318,11 @@ export interface PricingRequest {
   vehicleTypeId: number;
   policyName: string;
   hourlyRate?: number;
+  hourlyBillingMode?: string;
+  hourlyBillingBlockHours?: number;
   dailyRate?: number;
+  dailyBillingMode?: string;
+  dailyBillingBlockHours?: number;
   monthlyRate?: number;
   fixedSurcharge?: number;
   lostTicketFee?: number;
@@ -280,6 +330,11 @@ export interface PricingRequest {
   effectiveFrom?: string;
   effectiveTo?: string;
   status?: string;
+}
+
+export interface PricingRuleSettings {
+  dayStart: string;
+  nightStart: string;
 }
 
 // ======== FEEDBACK DTOs ========
@@ -477,6 +532,7 @@ export interface AuditLogResponse {
 export interface SessionCheckInRequest {
   vehicleId?: number;
   licensePlate?: string;
+  vehicleTypeId?: number;
   slotId?: number;
   reservationId?: number;
 }

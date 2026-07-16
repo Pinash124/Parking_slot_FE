@@ -5,6 +5,56 @@ import { userPortalService } from '../services/userPortalService';
 import Header from '../components/Header';
 import { formatParkingZoneName, formatVehicleTypeName, formatSlotCodeName, formatParkingSessionStatusName, isCompletedParkingSessionStatus } from '../utils/vehicleDisplay';
 import QrScannerModal from '../components/QrScannerModal';
+const isTwoWheelSlot = (slot: any) => {
+  const text = `${slot?.vehicleTypeName || ''} ${slot?.slotCode || ''}`.toUpperCase();
+  return slot?.wheelCount === 2
+    || text.includes('MOTORBIKE')
+    || text.includes('MOTO')
+    || text.includes('BIKE')
+    || text.includes('XE 2')
+    || text.includes('2 BÁNH')
+    || text.includes('2 BANH');
+};
+
+const isTwoWheelVehicleType = (vehicleType: any) => {
+  const text = `${vehicleType?.name || vehicleType?.vehicleTypeName || ''}`.toUpperCase();
+  const ascii = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return vehicleType?.wheelCount === 2
+    || text.includes('MOTOR')
+    || text.includes('BIKE')
+    || ascii.includes('XE 2')
+    || ascii.includes('XE MAY')
+    || ascii.includes('2 BANH');
+};
+
+
+const isTwoWheelSession = (session: any) => {
+  const text = `${session?.vehicleTypeName || ''} ${session?.slotCode || ''}`.toUpperCase();
+  return text.includes('MOTORBIKE')
+    || text.includes('MOTO')
+    || text.includes('BIKE')
+    || text.includes('XE 2')
+    || text.includes('2 BÁNH')
+    || text.includes('2 BANH');
+};
+
+const formatSessionParkingPlace = (session: any) => {
+  if (session?.slotCode) return formatSlotCodeName(session.slotCode);
+  if (isTwoWheelSession(session)) return 'Khu xe máy';
+  return session?.slotId ? `Ô đỗ #${session.slotId}` : 'Chưa gán ô';
+};
+
+const getSlotFloorNumber = (slot: any) => {
+  const text = `${slot?.floorName || ''} ${slot?.zoneName || ''} ${slot?.slotCode || ''}`;
+  const match = text.match(/F(\d+)/i);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+};
+
+const getSlotFloorLabel = (slot: any) => {
+  const floorNumber = getSlotFloorNumber(slot);
+  return floorNumber === Number.MAX_SAFE_INTEGER ? 'Khác' : `Tầng ${floorNumber}`;
+};
+
 
 
 export default function ParkingSessions() {
@@ -21,14 +71,18 @@ export default function ParkingSessions() {
 
   // Check-in Form state (when vehicle is not in garage)
   const [licensePlate, setLicensePlate] = useState('');
+  const [manualVehicleTypeId, setManualVehicleTypeId] = useState('');
   const [selectedSlotId, setSelectedSlotId] = useState<number | null>(null);
   const [selectedSlotCode, setSelectedSlotCode] = useState('');
+  const [showManualSlotPicker, setShowManualSlotPicker] = useState(false);
+  const [manualSlotFloorFilter, setManualSlotFloorFilter] = useState('all');
   const [ticketCode, setTicketCode] = useState('');
   const [entryGateCode, setEntryGateCode] = useState('GATE_IN_01');
   const [reservationId, setReservationId] = useState<number | null>(null);
   const [vehicleId, setVehicleId] = useState<number | null>(null);
   const [reservationData, setReservationData] = useState<any | null>(null);
   const [checkInMsg, setCheckInMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [floorOccupancyFilter, setFloorOccupancyFilter] = useState('all');
 
   // Checkout Options state (when vehicle is in garage)
   const [lostTicket, setLostTicket] = useState(false);
@@ -70,6 +124,23 @@ export default function ParkingSessions() {
     refetchOnWindowFocus: false,
   });
 
+  const {
+    data: floorOccupancy = [],
+    isLoading: isFloorOccupancyLoading,
+    isError: isFloorOccupancyError,
+    refetch: refetchFloorOccupancy,
+  } = useQuery({
+    queryKey: ['staffFloorOccupancy'],
+    queryFn: () => parkingService.staffGetFloorOccupancy(),
+    refetchInterval: 10000,
+    staleTime: 3000,
+    refetchOnWindowFocus: false,
+  });
+
+  const visibleFloorOccupancy = floorOccupancyFilter === 'all'
+    ? floorOccupancy
+    : floorOccupancy.filter((floor: any) => String(floor.floorId) === floorOccupancyFilter);
+
   // All Sessions Query (History)
   const { data: allSessions = [], refetch: refetchAllSessions } = useQuery({
     queryKey: ['staffAllSessionsList'],
@@ -86,30 +157,65 @@ export default function ParkingSessions() {
     queryFn: () => userPortalService.getAvailableSlots(undefined, undefined, 'PARKING'),
   });
 
-  const availableSlots = rawAvailableSlots.map((s: any) => ({
-    ...s,
-    id: s.slotId ?? s.id,
-  }));
+  const availableSlots = rawAvailableSlots
+    .map((s: any) => ({
+      ...s,
+      id: s.slotId ?? s.id,
+    }))
+    .filter((slot: any) => !isTwoWheelSlot(slot));
+
+  const manualSlotFloorOptions = Array.from(new Set(availableSlots.map(getSlotFloorLabel)))
+    .sort((a, b) => {
+      const floorA = Number(a.match(/\d+/)?.[0] ?? Number.MAX_SAFE_INTEGER);
+      const floorB = Number(b.match(/\d+/)?.[0] ?? Number.MAX_SAFE_INTEGER);
+      return floorA - floorB;
+    });
+
+  const filteredAvailableSlots = manualSlotFloorFilter === 'all'
+    ? availableSlots
+    : availableSlots.filter((slot: any) => getSlotFloorLabel(slot) === manualSlotFloorFilter);
+
+  const { data: vehicleTypes = [] } = useQuery({
+    queryKey: ['staffVehicleTypes'],
+    queryFn: async () => {
+      const facilityInfo = await parkingService.getFacilityInfo();
+      const types = (facilityInfo as any).supportedVehicleTypes || (facilityInfo as any).vehicleTypes || [];
+      return types
+        .map((type: any) => ({
+          ...type,
+          id: type.id ?? type.vehicleTypeId,
+          name: type.name ?? type.vehicleTypeName ?? type.typeName,
+        }))
+        .filter((type: any) => type.id && type.name);
+    },
+    staleTime: 60000,
+  });
+
+  const selectedManualVehicleType = vehicleTypes.find((type: any) => String(type.id) === manualVehicleTypeId);
+  const isManualTwoWheel = selectedManualVehicleType ? isTwoWheelVehicleType(selectedManualVehicleType) : false;
 
   // --- MUTATIONS ---
 
   // Check-in Mutation
   const checkInMutation = useMutation({
-    mutationFn: (payload: { licensePlate?: string; slotId?: number; ticketCode?: string; reservationId?: number; vehicleId?: number }) =>
+    mutationFn: (payload: { licensePlate?: string; vehicleTypeId?: number; slotId?: number; ticketCode?: string; reservationId?: number; vehicleId?: number }) =>
       parkingService.staffCheckIn(entryGateCode, payload),
     onSuccess: (res) => {
       setCheckInMsg({
         type: 'success',
-        text: `Cho xe vào bãi thành công! Mã vé: ${res.ticketCode} (Vị trí đỗ: ${formatSlotCodeName(res.slotCode) || `#${res.slotId}`}).`,
+        text: `Cho xe vào bãi thành công! Mã vé: ${res.ticketCode} (Vị trí đỗ: ${formatSessionParkingPlace(res)}).`,
       });
       setTicketCode('');
       setLicensePlate('');
+      setManualVehicleTypeId('');
       setSelectedSlotId(null);
       setSelectedSlotCode('');
+      setShowManualSlotPicker(false);
       setReservationId(null);
       setVehicleId(null);
       setReservationData(null);
       refetchActiveSessions();
+      refetchFloorOccupancy();
       refetchAllSessions();
 
       // Trigger barrier open overlay modal
@@ -139,6 +245,7 @@ export default function ParkingSessions() {
         text: `Tính phí checkout thành công! Mã vé: ${res.ticketCode}. Phí thanh toán: ${(res.totalFee || 0).toLocaleString()} đ.`,
       });
       refetchActiveSessions();
+      refetchFloorOccupancy();
       refetchAllSessions();
 
       // Update validation results with latest calculated session data
@@ -207,6 +314,7 @@ export default function ParkingSessions() {
       setOverlayType('checkout');
       setShowSuccessOverlay(true);
       refetchActiveSessions();
+      refetchFloorOccupancy();
       refetchAllSessions();
       refetchSlots();
     } catch (err: any) {
@@ -257,6 +365,7 @@ export default function ParkingSessions() {
       setOverlayType('checkout');
       setShowSuccessOverlay(true);
       refetchActiveSessions();
+      refetchFloorOccupancy();
       refetchAllSessions();
       refetchSlots();
     } catch (err: any) {
@@ -268,6 +377,41 @@ export default function ParkingSessions() {
 
   // --- ACTIONS & HANDLERS ---
 
+  const parseVehicleQr = (text: string) => {
+    const cleaned = text.trim();
+    if (!cleaned.toUpperCase().startsWith('VEHICLE|')) {
+      return { plate: cleaned.toUpperCase(), vehicleId: null as number | null };
+    }
+
+    let plate = '';
+    let vehicleId: number | null = null;
+    cleaned.split('|').forEach((part) => {
+      const index = part.indexOf('=');
+      if (index === -1) return;
+      const key = part.slice(0, index).trim().toLowerCase();
+      const value = part.slice(index + 1).trim();
+      if (key === 'plate' || key === 'licenseplate' || key === 'license_plate') {
+        plate = value.toUpperCase();
+      }
+      if (key === 'vehicleid' || key === 'vehicle_id' || key === 'id') {
+        const parsedId = Number(value);
+        vehicleId = Number.isFinite(parsedId) && parsedId > 0 ? parsedId : null;
+      }
+    });
+
+    return { plate: plate || cleaned.toUpperCase(), vehicleId };
+  };
+
+  const prefillWalkInCheckIn = (plate: string, parsedVehicleId?: number | null) => {
+    setLicensePlate(plate.toUpperCase());
+    setVehicleId(parsedVehicleId || null);
+    setReservationId(null);
+    setReservationData(null);
+    setValidationResult(null);
+    setSelectedSlotId(null);
+    setSelectedSlotCode('');
+  };
+
   // Validate search input (License plate / Ticket Code / Session ID / Reservation ID)
   const handleValidateGate = async (e?: React.FormEvent, customQuery?: string) => {
     if (e) e.preventDefault();
@@ -278,7 +422,8 @@ export default function ParkingSessions() {
     setReservationData(null);
     setReservationId(null);
 
-    const term = (customQuery || gateSearchQuery).trim().toUpperCase();
+    const parsedVehicleQr = parseVehicleQr(customQuery || gateSearchQuery);
+    const term = parsedVehicleQr.plate;
     if (!term) {
       setValidationError('Vui lòng nhập biển số, mã vé hoặc ID lượt đỗ.');
       return;
@@ -351,8 +496,8 @@ export default function ParkingSessions() {
         // Ignore reservation search errors so staff can continue with walk-in check-in.
       }
       // 3. Nothing found — Guest check-in mode
-      setValidationError('Không tìm thấy lượt đỗ tương ứng. Ghi nhận phương tiện chưa vào bãi.');
-      setLicensePlate(term); // Prefill plate with searched term
+      setValidationError('Chưa có lượt đỗ/đặt chỗ phù hợp. Đã chuyển biển số xuống form check-in.');
+      prefillWalkInCheckIn(term, parsedVehicleQr.vehicleId);
     } catch (err: any) {
       setValidationError('Lỗi xác thực kết nối máy chủ.');
     } finally {
@@ -369,6 +514,7 @@ export default function ParkingSessions() {
       setValidationResult(null);
       setGateSearchQuery('');
       refetchActiveSessions();
+      refetchFloorOccupancy();
       refetchAllSessions();
     } catch (err: any) {
       alert('Lỗi khi hạ barie: ' + (err.response?.data?.message || err.message));
@@ -391,8 +537,12 @@ export default function ParkingSessions() {
   const handleCheckInSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setCheckInMsg(null);
-    if (!licensePlate.trim() || !selectedSlotId) {
-      alert('Vui lòng nhập biển số xe và chọn vị trí ô đỗ.');
+    if (!licensePlate.trim()) {
+      alert('Vui lòng nhập biển số xe.');
+      return;
+    }
+    if (!manualVehicleTypeId) {
+      alert('Vui lòng chọn loại xe.');
       return;
     }
     const cleanPlate = licensePlate.toUpperCase().trim();
@@ -402,7 +552,8 @@ export default function ParkingSessions() {
     }
     checkInMutation.mutate({
       licensePlate: cleanPlate,
-      slotId: selectedSlotId,
+      vehicleTypeId: Number(manualVehicleTypeId),
+      slotId: isManualTwoWheel ? undefined : selectedSlotId || undefined,
       ticketCode: ticketCode.trim() || undefined,
       reservationId: reservationId || undefined,
       vehicleId: vehicleId || undefined,
@@ -510,8 +661,9 @@ export default function ParkingSessions() {
           return;
         }
       }
-      setGateSearchQuery(cleaned.toUpperCase());
-      handleValidateGate(undefined, cleaned.toUpperCase());
+      const parsedVehicleQr = parseVehicleQr(cleaned);
+      setGateSearchQuery(parsedVehicleQr.plate);
+      handleValidateGate(undefined, cleaned);
     } else {
       if (cleaned.toUpperCase().startsWith('VEHICLE|')) {
         const parts = cleaned.split('|');
@@ -856,7 +1008,7 @@ export default function ParkingSessions() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-450 uppercase tracking-wider mb-1.5">Biển số xe vào</label>
-                      <div className="flex gap-2">
+                      <div>
                         <input
                           type="text"
                           value={licensePlate}
@@ -865,21 +1017,37 @@ export default function ParkingSessions() {
                             setVehicleId(null);
                           }}
                           placeholder="Nhập biển số..."
-                          className="flex-1 bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs uppercase font-extrabold tracking-wider focus:outline-none"
+                          className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs uppercase font-extrabold tracking-wider focus:outline-none"
                         />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setQrPurpose('checkin');
-                            setIsQrScannerOpen(true);
-                          }}
-                          className="px-3 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition cursor-pointer"
-                        >
-                          <svg className="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h.01M16 20h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </button>
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-wider mb-1.5">Loại xe</label>
+                      <select
+                        value={manualVehicleTypeId}
+                        onChange={(e) => {
+                          const nextValue = e.target.value;
+                          setManualVehicleTypeId(nextValue);
+                          setShowManualSlotPicker(false);
+                          setManualSlotFloorFilter('all');
+                          setSelectedSlotId(null);
+                          setSelectedSlotCode('');
+                          const nextType = vehicleTypes.find((type: any) => String(type.id) === nextValue);
+                          if (nextType && isTwoWheelVehicleType(nextType)) {
+                            setSelectedSlotId(null);
+                            setSelectedSlotCode('');
+                          }
+                        }}
+                        className="w-full bg-slate-50 border border-slate-200 focus:border-indigo-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none cursor-pointer"
+                      >
+                        <option value="">-- Chọn loại xe --</option>
+                        {vehicleTypes.map((type: any) => (
+                          <option key={type.id} value={String(type.id)}>
+                            {formatVehicleTypeName(type.name || type.vehicleTypeName)}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     <div>
@@ -895,12 +1063,12 @@ export default function ParkingSessions() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-wider mb-1.5">Vị trí ô đỗ xe đã chọn</label>
+                      <label className="block text-[10px] font-bold text-slate-455 uppercase tracking-wider mb-1.5">Vị trí ô đỗ (tùy chọn)</label>
                       <input
                         type="text"
                         readOnly
-                        value={selectedSlotCode ? `${formatSlotCodeName(selectedSlotCode)} (Mã: #${selectedSlotId})` : ''}
-                        placeholder="Vui lòng chọn ô đỗ trên sơ đồ..."
+                        value={isManualTwoWheel ? 'Xe 2 bánh không chọn ô đỗ' : (selectedSlotCode ? formatSlotCodeName(selectedSlotCode) : '')}
+                        placeholder={isManualTwoWheel ? 'Xe 2 bánh được kiểm soát theo sức chứa' : 'Nếu bỏ trống hệ thống sẽ tự chọn ô đỗ gần nhất.'}
                         className="w-full bg-slate-100 border border-slate-200 text-slate-800 text-xs font-bold rounded-xl px-3 py-2 outline-none cursor-not-allowed"
                       />
                     </div>
@@ -917,88 +1085,208 @@ export default function ParkingSessions() {
                     </div>
                   </div>
 
-                  {/* Available slots selection grid */}
+                  {/* Optional manual slot selection */}
                   <div className="border-t border-slate-100 pt-4.5">
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Sơ đồ vị trí đỗ trống (Purpose: PARKING)</span>
-                      <button
-                        type="button"
-                        onClick={() => refetchSlots()}
-                        className="text-[9px] px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-500 font-extrabold rounded border border-slate-200 transition cursor-pointer"
-                      >
-                        Làm mới sơ đồ
-                      </button>
-                    </div>
-
-                    {isSlotsLoading ? (
-                      <div className="py-12 flex flex-col items-center justify-center">
-                        <span className="w-6 h-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span>
-                        <p className="text-[10px] text-slate-450 mt-2 font-bold animate-pulse">Đang tải danh sách ô đỗ...</p>
+                    {!manualVehicleTypeId ? (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-4 text-center text-xs font-bold text-slate-400">
+                        Chọn loại xe để tiếp tục.
                       </div>
-                    ) : availableSlots.length === 0 ? (
-                      <div className="py-12 text-center text-xs font-bold text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
-                        Không còn vị trí đỗ xe nào trống.
+                    ) : isManualTwoWheel ? (
+                      <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-center text-xs font-bold text-emerald-700">
+                        Xe 2 bánh không chọn ô, hệ thống tự kiểm soát sức chứa.
                       </div>
                     ) : (
-                      <div className="space-y-4">
-                        {/* Legend */}
-                        <div className="flex flex-wrap gap-3 text-[9px] font-bold text-slate-400 bg-slate-50 p-2 rounded-xl border border-slate-100">
-                          <span className="flex items-center space-x-1">
-                            <span className="w-2 h-2 bg-indigo-500 rounded-sm"></span>
-                            <span>Ô tô con</span>
-                          </span>
-                          <span className="flex items-center space-x-1">
-                            <span className="w-2 h-2 bg-purple-500 rounded-sm"></span>
-                            <span>Xe máy</span>
-                          </span>
-                          <span className="flex items-center space-x-1">
-                            <span className="w-2 h-2 bg-emerald-500 rounded-sm"></span>
-                            <span>Khác</span>
-                          </span>
-                        </div>
+                      <div className="space-y-3">
+                        {!showManualSlotPicker && (
+                          <button
+                            type="button"
+                            onClick={() => setShowManualSlotPicker(true)}
+                            className="rounded-xl bg-slate-100 px-3 py-2 text-[10px] font-extrabold text-slate-600 transition hover:bg-indigo-600 hover:text-white"
+                          >
+                            Chọn ô thủ công
+                          </button>
+                        )}
 
-                        {/* Grid */}
-                        <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-56 overflow-y-auto pr-1">
-                          {availableSlots.map((slot) => {
-                            const isSelected = selectedSlotId === slot.id;
-                            const colorStyle = getSlotColorClass(slot.vehicleTypeName);
+                        {showManualSlotPicker && (
+                          <div className="rounded-2xl border border-slate-150 bg-white p-3 space-y-3">
+                            <div className="flex flex-wrap justify-between items-center gap-2">
+                              <span className="text-[10px] font-bold text-slate-450 uppercase tracking-wider">Sơ đồ vị trí ô tô trống</span>
+                              <div className="flex items-center gap-2">
+                                <select
+                                  value={manualSlotFloorFilter}
+                                  onChange={(e) => setManualSlotFloorFilter(e.target.value)}
+                                  className="h-7 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[10px] font-bold text-slate-600 outline-none focus:border-indigo-500"
+                                >
+                                  <option value="all">Tất cả tầng</option>
+                                  {manualSlotFloorOptions.map((floor) => (
+                                    <option key={floor} value={floor}>{floor}</option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => setShowManualSlotPicker(false)}
+                                  className="text-[9px] px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-500 font-extrabold rounded border border-slate-200 transition cursor-pointer"
+                                >
+                                  Ẩn sơ đồ
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => refetchSlots()}
+                                  className="text-[9px] px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-500 font-extrabold rounded border border-slate-200 transition cursor-pointer"
+                                >
+                                  Làm mới sơ đồ
+                                </button>
+                              </div>
+                            </div>
 
-                            return (
-                              <button
-                                key={slot.id}
-                                type="button"
-                                onClick={() => handleSelectSlot(slot)}
-                                className={`p-2 rounded-xl border flex flex-col justify-center items-center h-16 transition cursor-pointer text-center ${
-                                  isSelected ? colorStyle.active : colorStyle.bg
-                                }`}
-                              >
-                                <span className={`w-1.5 h-1.5 rounded-full mb-0.5 shrink-0 ${colorStyle.dot}`}></span>
-                                <span className="font-mono font-black text-xs block leading-none">{formatSlotCodeName(slot.slotCode)}</span>
-                                <span className="text-[7px] font-bold block opacity-60 truncate mt-0.5 uppercase max-w-full">
-                                  {formatVehicleTypeName(slot.vehicleTypeName)}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
+                            {isSlotsLoading ? (
+                              <div className="py-10 flex flex-col items-center justify-center">
+                                <span className="w-6 h-6 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span>
+                                <p className="text-[10px] text-slate-450 mt-2 font-bold animate-pulse">Đang tải danh sách ô đỗ...</p>
+                              </div>
+                            ) : filteredAvailableSlots.length === 0 ? (
+                              <div className="py-10 text-center text-xs font-bold text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-xl">
+                                Không còn vị trí ô tô nào trống.
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto pr-1">
+                                {filteredAvailableSlots.map((slot) => {
+                                  const isSelected = selectedSlotId === slot.id;
+                                  const colorStyle = getSlotColorClass(slot.vehicleTypeName);
+
+                                  return (
+                                    <button
+                                      key={slot.id}
+                                      type="button"
+                                      onClick={() => handleSelectSlot(slot)}
+                                      className={`p-2 rounded-xl border flex flex-col justify-center items-center h-16 transition cursor-pointer text-center ${
+                                        isSelected ? colorStyle.active : colorStyle.bg
+                                      }`}
+                                    >
+                                      <span className={`w-1.5 h-1.5 rounded-full mb-0.5 shrink-0 ${colorStyle.dot}`}></span>
+                                      <span className="font-mono font-black text-xs block leading-none">{formatSlotCodeName(slot.slotCode)}</span>
+                                      <span className="text-[7px] font-bold block opacity-60 truncate mt-0.5 uppercase max-w-full">
+                                        {formatVehicleTypeName(slot.vehicleTypeName)}
+                                      </span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
 
                   <button 
                     type="submit" 
-                    disabled={checkInMutation.isPending}
+                    disabled={checkInMutation.isPending || !licensePlate.trim() || !manualVehicleTypeId}
                     className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer disabled:opacity-50"
                   >
-                    {checkInMutation.isPending ? 'Đang gửi...' : 'Xác nhận cho xe vào (Check-in)'}
+                    {checkInMutation.isPending ? 'Đang gửi...' : (!manualVehicleTypeId ? 'Chọn loại xe để tiếp tục' : 'Xác nhận cho xe vào (Check-in)')}
                   </button>
                 </form>
               </div>
             </div>
 
             {/* Right column: Active Sessions */}
-            <div className="lg:col-span-1 space-y-6">
-              <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4 animate-in fade-in duration-200">
+            <div className="lg:col-span-1 flex flex-col-reverse gap-6">
+              <div className="h-[360px] bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex flex-col gap-3 animate-in fade-in duration-200">
+                <div className="pb-3 border-b border-slate-100 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span>
+                      <h3 className="text-base font-extrabold text-slate-800">Sức chứa theo tầng</h3>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => refetchFloorOccupancy()}
+                      className="text-[10px] px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-bold transition"
+                    >
+                      Làm mới
+                    </button>
+                  </div>
+                  <select
+                    value={floorOccupancyFilter}
+                    onChange={(event) => setFloorOccupancyFilter(event.target.value)}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700 outline-none transition focus:border-indigo-500"
+                  >
+                    <option value="all">Tất cả tầng</option>
+                    {floorOccupancy.map((floor: any) => {
+                      const rawFloorLabel = floor.floorName || (floor.floorNumber ? `Tầng ${floor.floorNumber}` : `Tầng #${floor.floorId}`);
+                      const floorLabel = String(rawFloorLabel).replace(/^Floor\s*/i, 'Tầng ');
+                      return (
+                        <option key={floor.floorId || floorLabel} value={String(floor.floorId)}>
+                          {floorLabel}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+                  {isFloorOccupancyLoading ? (
+                    <div className="text-center py-8 text-slate-400 text-xs font-bold">
+                      Đang tải dữ liệu sức chứa...
+                    </div>
+                  ) : isFloorOccupancyError ? (
+                    <div className="text-center py-8 text-rose-500 text-xs font-bold">
+                      Không tải được dữ liệu sức chứa. Khởi động lại backend rồi bấm làm mới.
+                    </div>
+                  ) : visibleFloorOccupancy.length === 0 ? (
+                    <div className="text-center py-8 text-slate-400 text-xs font-bold">
+                      Chưa có dữ liệu sức chứa.
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {visibleFloorOccupancy.map((floor: any) => {
+                      const rawFloorLabel = floor.floorName || (floor.floorNumber ? `Tầng ${floor.floorNumber}` : `Tầng #${floor.floorId}`);
+                      const floorLabel = String(rawFloorLabel).replace(/^Floor\s*/i, 'Tầng ');
+                      const carPercent = floor.carTotal > 0 ? Math.min(100, Math.round((floor.carUsed / floor.carTotal) * 100)) : 0;
+                      const twoWheelPercent = floor.twoWheelTotal > 0 ? Math.min(100, Math.round((floor.twoWheelUsed / floor.twoWheelTotal) * 100)) : 0;
+                      const totalUsed = floor.carUsed + floor.twoWheelUsed;
+                      const totalCapacity = floor.carTotal + floor.twoWheelTotal;
+
+                      return (
+                        <div key={floor.floorId || floorLabel} className="py-3 first:pt-0 last:pb-0">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs font-extrabold text-slate-800">{floorLabel}</p>
+                            <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">
+                              {totalUsed}/{totalCapacity} xe
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="rounded-xl bg-indigo-50/70 p-2">
+                              <div className="flex justify-between text-[10px] font-bold text-slate-600 mb-1">
+                                <span>Ô tô</span>
+                                <span className="font-mono">{floor.carUsed}/{floor.carTotal}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${carPercent}%` }} />
+                              </div>
+                            </div>
+
+                            <div className="rounded-xl bg-emerald-50/70 p-2">
+                              <div className="flex justify-between text-[10px] font-bold text-slate-600 mb-1">
+                                <span>Xe 2 bánh</span>
+                                <span className="font-mono">{floor.twoWheelUsed}/{floor.twoWheelTotal}</span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${twoWheelPercent}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-[360px] bg-white border border-slate-200 p-5 rounded-3xl shadow-sm flex flex-col gap-3 animate-in fade-in duration-200">
                 <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
@@ -1019,7 +1307,7 @@ export default function ParkingSessions() {
                   </div>
                 )}
 
-                <div className="space-y-3.5 max-h-[500px] overflow-y-auto pr-1">
+                <div className="min-h-0 flex-1 space-y-3.5 overflow-y-auto pr-1">
                   {activeSessions.length === 0 ? (
                     <div className="text-center py-12 text-slate-400 text-xs font-bold">
                       Không có xe nào đang hoạt động.
@@ -1040,7 +1328,7 @@ export default function ParkingSessions() {
                             {session.licensePlate || `Xe ID #${session.vehicleId}`}
                           </p>
                           <p className="text-[10px] text-slate-450 font-semibold">
-                            Vị trí: <strong className="text-slate-700 font-bold">{formatSlotCodeName(session.slotCode) || `Ô đỗ #${session.slotId}`}</strong>
+                            Vị trí: <strong className="text-slate-700 font-bold">{formatSessionParkingPlace(session)}</strong>
                           </p>
                           <p className="text-[9px] text-slate-400">
                             Vào lúc: {session.entryTime ? new Date(session.entryTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}
@@ -1123,7 +1411,7 @@ export default function ParkingSessions() {
                       <tr key={session.id || session.sessionId} className="hover:bg-slate-50/50">
                         <td className="py-3.5 font-mono text-slate-500 font-bold">#{session.id || session.sessionId}</td>
                         <td className="py-3.5 text-slate-800 font-extrabold uppercase font-mono tracking-wide">{session.licensePlate || `Xe #${session.vehicleId}`}</td>
-                        <td className="py-3.5 text-indigo-650 font-bold">{formatSlotCodeName(session.slotCode) || `Ô đỗ #${session.slotId}`}</td>
+                        <td className="py-3.5 text-indigo-650 font-bold">{formatSessionParkingPlace(session)}</td>
                         <td className="py-3.5 text-slate-600 font-mono">{session.ticketCode || '—'}</td>
                         <td className="py-3.5 text-slate-455 font-medium">
                           {session.entryTime ? new Date(session.entryTime).toLocaleString('vi-VN') : '—'}
@@ -1412,6 +1700,7 @@ export default function ParkingSessions() {
                       setValidationResult(null);
                       setGateSearchQuery('');
                       refetchActiveSessions();
+                      refetchFloorOccupancy();
                       refetchAllSessions();
                     }
                   }}

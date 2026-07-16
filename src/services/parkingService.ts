@@ -2,6 +2,7 @@ import api from './api';
 import type {
   ParkingSession,
   DashboardOverviewResponse,
+  ManagerReportResponse,
   BuildingView,
   BuildingRequest,
   FloorView,
@@ -16,10 +17,12 @@ import type {
   SlotStatusUpdateRequest,
   PricingView,
   PricingRequest,
+  PricingRuleSettings,
   FeedbackResponse,
   IncidentRequest,
   IncidentResponse,
   ParkingSessionResponse,
+  FloorOccupancyResponse,
   SessionCheckInRequest,
   SessionCheckoutRequest,
   SystemOperationalStatusResponse,
@@ -42,6 +45,11 @@ export const parkingService = {
   // ========== DASHBOARD ==========
   getOverviewReport: async (): Promise<DashboardOverviewResponse> => {
     const response = await api.get<DashboardOverviewResponse>('/api/dashboard/overview');
+    return response.data;
+  },
+
+  getManagerReport: async (params?: { from?: string; to?: string }): Promise<ManagerReportResponse> => {
+    const response = await api.get<ManagerReportResponse>('/api/manager/reports', { params });
     return response.data;
   },
 
@@ -111,6 +119,11 @@ export const parkingService = {
     const response = await api.get<ParkingSessionResponse>('/api/staff/parking-sessions/lookup', {
       params: { query },
     });
+    return response.data;
+  },
+
+  staffGetFloorOccupancy: async (): Promise<FloorOccupancyResponse[]> => {
+    const response = await api.get<FloorOccupancyResponse[]>('/api/staff/parking-sessions/floor-occupancy');
     return response.data;
   },
 
@@ -340,6 +353,16 @@ export const parkingService = {
 
   deletePricingPolicy: async (id: number): Promise<void> => {
     await api.delete(`/api/manager/pricing-policies/${id}`);
+  },
+
+  getPricingRules: async (): Promise<PricingRuleSettings> => {
+    const response = await api.get<PricingRuleSettings>('/api/manager/pricing-rules');
+    return response.data;
+  },
+
+  updatePricingRules: async (payload: PricingRuleSettings): Promise<PricingRuleSettings> => {
+    const response = await api.put<PricingRuleSettings>('/api/manager/pricing-rules', payload);
+    return response.data;
   },
 
   // ========== MANAGER - VEHICLE TYPES ==========

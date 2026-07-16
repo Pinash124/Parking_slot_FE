@@ -22,11 +22,15 @@ export default function ParkingLogs() {
 
   // Filter & search logic
   const filteredSessions = sessions?.filter((session) => {
+    const sessionStatus = String(session.status || '').toUpperCase();
     // 1. Status Filter
     if (statusFilter === 'COMPLETED_GROUP' && !isCompletedParkingSessionStatus(session.status)) {
       return false;
     }
-    if (statusFilter !== 'ALL' && statusFilter !== 'COMPLETED_GROUP' && session.status !== statusFilter) {
+    if (statusFilter === 'PAYMENT_PENDING' && !['PAYMENT_PENDING', 'PENDING_PAYMENT'].includes(sessionStatus)) {
+      return false;
+    }
+    if (statusFilter !== 'ALL' && statusFilter !== 'COMPLETED_GROUP' && statusFilter !== 'PAYMENT_PENDING' && sessionStatus !== statusFilter) {
       return false;
     }
     // 2. Search Query (Ticket code, slot code, license plate)
@@ -113,6 +117,14 @@ export default function ParkingLogs() {
                 }`}
               >
                 Đang đỗ
+              </button>
+              <button
+                onClick={() => setStatusFilter('PAYMENT_PENDING')}
+                className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition ${
+                  statusFilter === 'PAYMENT_PENDING' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                Chờ thanh toán
               </button>
               <button 
                 onClick={() => setStatusFilter('COMPLETED_GROUP')}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Header from '../components/Header';
 import { formatVehicleTypeName, formatSlotCodeName, formatSlotStatusName, formatDeviceStatusName } from '../utils/vehicleDisplay';
@@ -19,6 +19,34 @@ type MainTabType = 'overview' | 'slots' | 'vehicles' | 'accounts' | 'system' | '
 type VehiclesSubTabType = 'vehicleList' | 'vehicleTypes';
 type SystemSubTabType = 'hardware' | 'settings' | 'logs';
 
+const adminMainTabs: MainTabType[] = ['overview', 'slots', 'vehicles', 'accounts', 'system', 'passes'];
+const adminTabStorageKey = 'smartparking.admin.activeTab';
+
+const isAdminMainTab = (value: string | null): value is MainTabType =>
+  !!value && adminMainTabs.includes(value as MainTabType);
+
+const getInitialAdminTab = (): MainTabType => {
+  if (typeof window === 'undefined') return 'overview';
+
+  const urlTab = new URLSearchParams(window.location.search).get('tab');
+  if (isAdminMainTab(urlTab)) return urlTab;
+
+  const storedTab = window.localStorage.getItem(adminTabStorageKey);
+  if (isAdminMainTab(storedTab)) return storedTab;
+
+  return 'overview';
+};
+
+const getVehicleFilterGroup = (name?: string) => {
+  const normalized = (name || '').toUpperCase();
+  const ascii = normalized.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (normalized.includes('MOTOR') || normalized.includes('BIKE') || ascii.includes('XE 2') || ascii.includes('XE MAY') || ascii.includes('2 BANH')) return 'TWO_WHEEL';
+  if (normalized.includes('CAR') || normalized.includes('AUTO') || ascii.includes('O TO')) return 'FOUR_WHEEL';
+  return 'OTHER';
+};
+
+const isTwoWheelSlot = (slot: any) => getVehicleFilterGroup(`${slot?.vehicleTypeName || ''} ${slot?.slotCode || ''}`) === 'TWO_WHEEL';
+
 const formatMonthlyPassStatus = (status?: string) => {
   switch ((status || '').toUpperCase()) {
     case 'ACTIVE': return 'Đang hoạt động';
@@ -31,11 +59,20 @@ const formatMonthlyPassStatus = (status?: string) => {
 };
 export default function AdminDashboard() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<MainTabType>('overview');
+  const [activeTab, setActiveTab] = useState<MainTabType>(getInitialAdminTab);
 
   const [vehiclesSubTab, setVehiclesSubTab] = useState<VehiclesSubTabType>('vehicleList');
   const [systemSubTab, setSystemSubTab] = useState<SystemSubTabType>('hardware');
   const [isQrScannerOpen, setIsQrScannerOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    window.localStorage.setItem(adminTabStorageKey, activeTab);
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', activeTab);
+    window.history.replaceState(null, '', url);
+  }, [activeTab]);
 
   // --- API QUERIES ---
   const { data: overviewData } = useQuery({
@@ -51,6 +88,8 @@ export default function AdminDashboard() {
     queryFn: () => parkingService.getManagementSlotsList(),
     refetchInterval: 10000,
   });
+
+  const visibleCarSlots = slots.filter((slot: any) => !isTwoWheelSlot(slot));
 
   const { data: vehicleTypes = [] } = useQuery<VehicleTypeView[]>({
     queryKey: ['vehicleTypes'],
@@ -580,14 +619,14 @@ export default function AdminDashboard() {
           <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-6">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-base font-extrabold text-slate-800">Sơ đồ quản trị các ô đỗ xe</h3>
-              <span className="text-[10px] text-slate-400 font-bold">Tổng số: {slots.length} vị trí đỗ</span>
+              <span className="text-[10px] text-slate-400 font-bold">Tổng số: {visibleCarSlots.length} vị trí đỗ</span>
             </div>
 
-            {slots.length === 0 ? (
+            {visibleCarSlots.length === 0 ? (
               <div className="text-slate-400 text-center py-20 text-xs">Chưa có ô đỗ xe nào được cấu hình.</div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {slots.map((slot) => {
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 items-stretch">
+                {visibleCarSlots.map((slot: any) => {
                   const isAvailable = slot.status === 'AVAILABLE';
                   const isMaintenance = slot.status === 'MAINTENANCE';
 
@@ -599,10 +638,10 @@ export default function AdminDashboard() {
                   return (
                     <div
                       key={slot.id}
-                      className="border border-slate-200 rounded-2xl p-4 flex flex-col justify-between space-y-3 shadow-inner hover:shadow transition bg-slate-50/50"
+                      className="border border-slate-200 rounded-2xl p-4 min-h-[150px] flex flex-col justify-between space-y-3 shadow-inner hover:shadow transition bg-slate-50/50"
                     >
                       <div>
-                        <span className="font-mono font-black text-sm text-slate-800 tracking-wide">{formatSlotCodeName(slot.slotCode)}</span>
+                        <span className="font-mono font-black text-sm text-slate-800 tracking-wide leading-tight min-h-[34px] flex items-start">{formatSlotCodeName(slot.slotCode)}</span>
                         <span className="text-[9px] font-bold text-slate-400 block uppercase mt-0.5">{formatVehicleTypeName(slot.vehicleTypeName)}</span>
                       </div>
 
