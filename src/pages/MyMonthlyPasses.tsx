@@ -36,7 +36,7 @@ export default function MyMonthlyPasses() {
   });
 
   const { data: pricingPolicies = [] } = useQuery({
-    queryKey: ['pricingPolicies'],
+    queryKey: ['userPricingPolicies'],
     queryFn: () => userPortalService.getPricingPolicies(),
   });
 

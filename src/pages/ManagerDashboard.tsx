@@ -211,7 +211,7 @@ export default function ManagerDashboard() {
   });
 
   const { data: pricingPolicies = [] } = useQuery({
-    queryKey: ['pricingPolicies'],
+    queryKey: ['managerPricingPolicies'],
     queryFn: () => parkingService.getPricingPolicies(),
   });
 
@@ -294,7 +294,8 @@ export default function ManagerDashboard() {
     mutationFn: ({ id, payload }: { id: number; payload: PricingRequest }) =>
       parkingService.updatePricingPolicy(id, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pricingPolicies'] });
+      queryClient.invalidateQueries({ queryKey: ['managerPricingPolicies'] });
+      queryClient.invalidateQueries({ queryKey: ['userPricingPolicies'] });
       alert('Đã cập nhật biểu phí thành công!');
     },
     onError: (err: any) => alert('Lỗi khi cập nhật biểu phí: ' + (err.response?.data?.message || err.message)),
@@ -1774,8 +1775,53 @@ function BillingModeControls({
   onModeChange,
   onBlockHoursChange,
 }: BillingModeControlsProps) {
+  const isPerTurn = mode === 'PER_TURN';
+  const [hourDraft, setHourDraft] = useState(mode === 'PER_BLOCK' ? String(blockHours || 1) : '');
+
+  useEffect(() => {
+    setHourDraft(mode === 'PER_BLOCK' ? String(blockHours || 1) : '');
+  }, [mode, blockHours]);
+
+  const commitHourDraft = () => {
+    if (isPerTurn) return;
+    const trimmedValue = hourDraft.trim();
+    if (!trimmedValue) {
+      onModeChange('PER_HOUR');
+      onBlockHoursChange(1);
+      return;
+    }
+
+    const nextBlockHours = Math.min(Math.max(parseInt(trimmedValue, 10) || 1, 1), 24);
+    if (nextBlockHours <= 1) {
+      onModeChange('PER_HOUR');
+      onBlockHoursChange(1);
+      setHourDraft('');
+      return;
+    }
+
+    onModeChange('PER_BLOCK');
+    onBlockHoursChange(nextBlockHours);
+    setHourDraft(String(nextBlockHours));
+  };
+
+  const handleUnitChange = (value: string) => {
+    if (value === 'PER_TURN') {
+      onModeChange('PER_TURN');
+      setHourDraft('');
+      return;
+    }
+
+    if (!hourDraft.trim()) {
+      onModeChange('PER_HOUR');
+      onBlockHoursChange(1);
+      return;
+    }
+
+    commitHourDraft();
+  };
+
   return (
-    <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
+    <div className="flex items-center justify-center gap-2 whitespace-nowrap">
       <div className="flex items-center justify-center gap-1.5">
         <input
           type="number"
@@ -1786,29 +1832,34 @@ function BillingModeControls({
         />
         <span className="text-sm font-bold text-slate-800">đ</span>
       </div>
-      <select
-        value={mode}
-        onChange={(e) => onModeChange(e.target.value)}
-        className="h-9 w-[76px] bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
-      >
-        <option value="PER_TURN">/ lượt</option>
-        <option value="PER_HOUR">/ giờ</option>
-        <option value="PER_BLOCK">/ X giờ</option>
-      </select>
-      {mode === 'PER_BLOCK' && (
-        <div className="flex items-center justify-center gap-1 text-[10px] text-slate-500">
-          <span>Mỗi</span>
-          <input
-            type="number"
-            min="1"
-            max="24"
-            className="h-9 w-12 bg-white border border-slate-200 rounded-lg px-1.5 py-1 text-center font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
-            value={blockHours}
-            onChange={(e) => onBlockHoursChange(parseInt(e.target.value, 10) || 1)}
-          />
-          <span>giờ</span>
-        </div>
+      <span className="text-sm font-bold text-slate-800">/</span>
+      {!isPerTurn && (
+        <input
+          type="number"
+          min="1"
+          max="24"
+          value={hourDraft}
+          onChange={(e) => setHourDraft(e.target.value)}
+          onBlur={commitHourDraft}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              commitHourDraft();
+              e.currentTarget.blur();
+            }
+          }}
+          className="h-9 w-12 bg-white border border-slate-200 rounded-lg px-2 py-1 text-center text-sm font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
+          placeholder="1"
+          title="Để trống mặc định là 1 giờ"
+        />
       )}
+      <select
+        value={isPerTurn ? 'PER_TURN' : 'PER_HOUR'}
+        onChange={(e) => handleUnitChange(e.target.value)}
+        className="h-9 w-[72px] bg-white border border-slate-200 rounded-lg px-2 py-1 text-sm font-bold text-slate-800 focus:border-indigo-500 focus:outline-none"
+      >
+        <option value="PER_TURN">lượt</option>
+        <option value="PER_HOUR">giờ</option>
+      </select>
     </div>
   );
 }

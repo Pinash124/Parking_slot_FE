@@ -1,23 +1,53 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import { authService } from '../services/authService';
 import { userPortalService } from '../services/userPortalService';
 import { parkingService } from '../services/parkingService';
+import { formatVehicleTypeName } from '../utils/vehicleDisplay';
 import type {
   FeedbackCreateRequest,
+  PricingView,
 } from '../types/parking';
+
+const formatMoney = (value?: number | null) => `${(value ?? 0).toLocaleString('vi-VN')}đ`;
+
+const formatBillingUnit = (mode?: string, blockHours?: number) => {
+  const normalizedMode = (mode || 'PER_HOUR').toUpperCase();
+  if (normalizedMode === 'PER_TURN') return '/ lượt';
+  if (normalizedMode === 'PER_BLOCK') return `/ ${blockHours || 1} giờ`;
+  return '/ giờ';
+};
+
+const formatRateWithUnit = (
+  amount?: number | null,
+  mode?: string,
+  blockHours?: number,
+) => `${formatMoney(amount)} ${formatBillingUnit(mode, blockHours)}`;
+
+type CustomerTab = 'info' | 'ticket' | 'feedback';
+const customerTabs: CustomerTab[] = ['ticket', 'info', 'feedback'];
 
 export default function DriverDashboard() {
   const currentUser = authService.getCurrentUser();
-  const [activeTab, setActiveTab] = useState<'info' | 'ticket' | 'feedback'>('ticket');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as CustomerTab | null;
+  const activeTab: CustomerTab = tabParam && customerTabs.includes(tabParam) ? tabParam : 'ticket';
   const [activeSessionIndex, setActiveSessionIndex] = useState(0);
+
+  const setActiveTab = (tab: CustomerTab) => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('tab', tab);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   // Load pricing policies for rates view
   const { data: pricingPolicies = [] } = useQuery({
-    queryKey: ['pricingPolicies'],
+    queryKey: ['userPricingPolicies'],
     queryFn: () => userPortalService.getPricingPolicies(),
+    refetchInterval: activeTab === 'info' ? 5000 : false,
+    refetchOnWindowFocus: true,
   });
 
   // Current active sessions query - returns array of active sessions
@@ -296,18 +326,22 @@ export default function DriverDashboard() {
                   <thead>
                     <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
                       <th className="pb-3 pr-4">Loại xe</th>
-                      <th className="pb-3 px-4 text-right">Qua đêm / giờ (1h đầu)</th>
-                      <th className="pb-3 px-4 text-right">Lượt ban ngày (24h)</th>
+                      <th className="pb-3 px-4 text-right">Giá qua đêm</th>
+                      <th className="pb-3 px-4 text-right">Giá ban ngày</th>
                       <th className="pb-3 pl-4 text-right">Mất thẻ/Vé phạt</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50 font-semibold text-slate-700">
-                    {pricingPolicies.map((policy) => (
+                    {pricingPolicies.map((policy: PricingView) => (
                       <tr key={policy.id} className="hover:bg-slate-50/50 transition">
-                        <td className="py-3.5 pr-4 text-slate-900 font-bold">{policy.vehicleTypeName || 'N/A'}</td>
-                        <td className="py-3.5 px-4 text-right text-indigo-600">{(policy.hourlyRate ?? 0).toLocaleString()}đ</td>
-                        <td className="py-3.5 px-4 text-right text-indigo-600">{(policy.dailyRate ?? 0).toLocaleString()}đ</td>
-                        <td className="py-3.5 pl-4 text-right text-rose-600">{(policy.lostTicketFee ?? 0).toLocaleString()}đ</td>
+                        <td className="py-3.5 pr-4 text-slate-900 font-bold">{formatVehicleTypeName(policy.vehicleTypeName)}</td>
+                        <td className="py-3.5 px-4 text-right text-indigo-600">
+                          {formatRateWithUnit(policy.hourlyRate, policy.hourlyBillingMode, policy.hourlyBillingBlockHours)}
+                        </td>
+                        <td className="py-3.5 px-4 text-right text-indigo-600">
+                          {formatRateWithUnit(policy.dailyRate, policy.dailyBillingMode, policy.dailyBillingBlockHours)}
+                        </td>
+                        <td className="py-3.5 pl-4 text-right text-rose-600">{formatMoney(policy.lostTicketFee)}</td>
                       </tr>
                     ))}
                   </tbody>
